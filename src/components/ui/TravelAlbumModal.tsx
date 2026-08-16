@@ -1,0 +1,157 @@
+import React, { useRef, useEffect } from 'react';
+import { useWestLakeStore, WEST_LAKE_SCENES, ALL_SCENE_IDS } from '../../store/useWestLakeStore';
+import { X, Download, Award } from 'lucide-react';
+
+export const TravelAlbumModal: React.FC = () => {
+  const { isTravelAlbumOpen, setTravelAlbumOpen, collectedStamps } = useWestLakeStore();
+  const canvasRef = useRef<HTMLCanvasElement>(null!);
+
+  // 绘制《西湖游历图册》宣纸画卷
+  const drawAlbumCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const width = (canvas.width = 1000);
+    const height = (canvas.height = 560);
+
+    // 1. 宣纸底色
+    ctx.fillStyle = '#F4F1EA';
+    ctx.fillRect(0, 0, width, height);
+
+    // 2. 宣纸边框
+    ctx.strokeStyle = '#2C2C2C';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(20, 20, width - 40, height - 40);
+
+    ctx.strokeStyle = '#C5A55A';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(26, 26, width - 52, height - 52);
+
+    // 3. 画卷标题
+    ctx.fillStyle = '#2C2C2C';
+    ctx.font = 'bold 36px "Ma Shan Zheng", "Noto Serif SC", serif';
+    ctx.fillText('西湖游历图册', 60, 80);
+
+    ctx.font = '16px "Noto Serif SC", serif';
+    ctx.fillStyle = '#555555';
+    ctx.fillText(`已收录景致印痕：${collectedStamps.size} / ${ALL_SCENE_IDS.length}`, 60, 115);
+
+    // 4. 绘制印章网格（5 列 × 2 行）
+    ALL_SCENE_IDS.forEach((id, idx) => {
+      const data = WEST_LAKE_SCENES[id];
+      const isStamped = collectedStamps.has(id);
+
+      const col = idx % 5;
+      const row = Math.floor(idx / 5);
+      const cellW = 176;
+      const x = 52 + col * (cellW + 10);
+      const y = 150 + row * 170;
+
+      // 印章框
+      ctx.fillStyle = isStamped ? 'rgba(184, 59, 50, 0.08)' : 'rgba(44, 44, 44, 0.03)';
+      ctx.strokeStyle = isStamped ? '#B83B32' : '#C8C5BC';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(x, y, cellW, 150, 8);
+      ctx.fill();
+      ctx.stroke();
+
+      // 景点名称
+      ctx.fillStyle = isStamped ? '#2C2C2C' : '#888888';
+      ctx.font = 'bold 20px "Noto Serif SC", serif';
+      ctx.fillText(data.name, x + 16, y + 42);
+
+      ctx.font = '11px "Noto Serif SC", serif';
+      ctx.fillStyle = '#666666';
+      ctx.fillText(data.pinyin, x + 16, y + 62);
+
+      // 印章朱砂落印
+      if (isStamped) {
+        ctx.fillStyle = '#B83B32';
+        ctx.strokeStyle = '#B83B32';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 96, y + 58, 60, 60);
+
+        ctx.font = 'bold 15px "Ma Shan Zheng", serif';
+        ctx.fillText(data.stampName.substring(0, 2), x + 108, y + 84);
+        ctx.fillText(data.stampName.substring(2, 4), x + 108, y + 106);
+      } else {
+        ctx.fillStyle = '#C8C5BC';
+        ctx.font = '12px "Noto Serif SC", serif';
+        ctx.fillText('〔未解锁〕', x + 96, y + 92);
+      }
+    });
+
+    // 5. 落款日期
+    const today = new Date().toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    ctx.fillStyle = '#555555';
+    ctx.font = '14px "Noto Serif SC", serif';
+    ctx.fillText(`落款：丙午年 · ${today}`, 760, 520);
+  };
+
+  useEffect(() => {
+    if (isTravelAlbumOpen) {
+      setTimeout(drawAlbumCanvas, 100);
+    }
+  }, [isTravelAlbumOpen, collectedStamps]);
+
+  // 导出 PNG
+  const exportImage = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const url = canvas.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `西湖游历图册_${Date.now()}.png`;
+    a.click();
+  };
+
+  if (!isTravelAlbumOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1A1A1A]/70 backdrop-blur-md p-4 animate-ink-fade pointer-events-auto">
+      <div className="glass-ink-panel p-4 sm:p-6 rounded-3xl max-w-4xl w-full border-2 border-[#C5A55A] shadow-2xl relative max-h-[88vh] overflow-y-auto">
+        {/* 标题与关闭按钮 */}
+        <div className="flex items-center justify-between pb-4 border-b border-[#2C2C2C]/10 mb-4">
+          <div className="flex items-center gap-2">
+            <Award className="w-6 h-6 text-[#B83B32]" />
+            <h2 className="text-xl font-bold tracking-widest text-[#2C2C2C]">
+              《西湖游历图册》鉴赏
+            </h2>
+          </div>
+          <button
+            onClick={() => setTravelAlbumOpen(false)}
+            className="p-1.5 rounded-full hover:bg-[#2C2C2C]/10 text-[#555555] cursor-pointer"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* 宣纸 Canvas 预览 */}
+        <div className="w-full overflow-hidden flex justify-center bg-[#F4F1EA] rounded-xl p-2 shadow-inner border border-[#2C2C2C]/10">
+          <canvas ref={canvasRef} className="max-w-full h-auto rounded" />
+        </div>
+
+        {/* 底部导出与操作栏 */}
+        <div className="mt-6 flex flex-col-reverse sm:flex-row items-start sm:items-center justify-between gap-3">
+          <p className="text-xs text-[#555555]">
+            💡 游览完成景点并点击“盖章”即可将水墨印章收录至个人游历图册中。
+          </p>
+          <button
+            onClick={exportImage}
+            className="btn-ink flex items-center gap-2 rounded-full font-semibold border-[#B83B32] text-[#B83B32]"
+          >
+            <Download className="w-4 h-4" />
+            <span>导出全景画卷 PNG</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
