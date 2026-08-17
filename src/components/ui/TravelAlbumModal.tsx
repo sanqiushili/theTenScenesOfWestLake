@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useWestLakeStore, WEST_LAKE_SCENES, ALL_SCENE_IDS, SceneId } from '../../store/useWestLakeStore';
 import { loadImage } from '../../utils/scenePhoto';
-import { X, Download, Award, Image as ImageIcon } from 'lucide-react';
+import { X, Download, Award, Image as ImageIcon, Send } from 'lucide-react';
 
 export const TravelAlbumModal: React.FC = () => {
   const { isTravelAlbumOpen, setTravelAlbumOpen, collectedStamps, scenePhotos } = useWestLakeStore();
@@ -149,15 +149,21 @@ export const TravelAlbumModal: React.FC = () => {
     }
   }, [isTravelAlbumOpen, collectedStamps, scenePhotos]);
 
-  // ── 导出保存兼容 ──
-  // 小红书「小工具」是纯离线 Web 沙箱：无官方 JSBridge、禁 a[download]、禁外链。
-  // 三级降级链：① 容器若开放桥接则调原生存相册；
-  //            ② 移动端 WebView（小红书 App 内等）弹大图引导长按保存——与小红书笔记原生保存习惯一致；
-  //            ③ 桌面浏览器走 a[download] 文件下载。
-  const w = typeof window !== 'undefined' ? (window as any) : undefined;
-  const isXhsEnv = !!w && /xhs/i.test(w.navigator?.userAgent || '');
-  const isTouchWebView = !!w && ('ontouchstart' in w || (w.navigator?.maxTouchPoints ?? 0) > 0);
+  // ── 导出保存兼容（小红书「小工具」官方 JSAPI）──
+  // 容器自动注入 window.xhs.miniTool（saveImageToPhotosAlbum / writeTempFile / postNote），
+  // 禁 a[download] 与长按菜单。调用约定（官方能力清单 §3）：
+  // 唯一入口 window.xhs.miniTool.<api>(options)；不传任何回调时返回 Promise；
+  // 参数按 JSON Schema 校验，未声明的字段不要传；window.xhs?.miniTool 判空并留降级路径。
+  // 降级链：① 小工具容器 → JSAPI 存相册（大图先 writeTempFile 换 filePath）；
+  //        ② 普通移动端 WebView → 弹大图引导长按保存；
+  //        ③ 桌面浏览器 → a[download] 文件下载。
+  const miniTool = typeof window !== 'undefined' ? (window as any).xhs?.miniTool : undefined;
+  const hasBridge = typeof miniTool?.saveImageToPhotosAlbum === 'function';
+  const isTouchWebView =
+    typeof window !== 'undefined' &&
+    ('ontouchstart' in window || (navigator?.maxTouchPoints ?? 0) > 0);
   const [savedTip, setSavedTip] = useState('');
+  const [saving, setSaving] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
 
   const showTip = (msg: string) => {
@@ -165,58 +171,41 @@ export const TravelAlbumModal: React.FC = () => {
     setTimeout(() => setSavedTip(''), 2500);
   };
 
-  // 探测容器桥接（多命名空间，兼容 Promise 式/回调式 API；沙箱未开放时均为 undefined）
-  const pickBridge = () => {
-    const candidates = [w?.xhs?.miniTool, w?.xhsmini, w?.XhsMiniTool, w?.jsBridge, w?.JSBridge];
-    return (
-      candidates.find(
-        (b) => b && (b.saveImageToPhotosAlbum || b.saveImageToAlbum || b.saveImage)
-      ) || null
-    );
-  };
-  const hasBridge = !!pickBridge();
-
-  const callBridgeSave = (bridge: any, url: string): Promise<void> =>
-    new Promise((resolve, reject) => {
-      const cb = (res: any) => (res === false ? reject(new Error('save failed')) : resolve());
+  // 大图 base64 先用 writeTempFile 落成临时文件，避免超长 base64 上行；失败回退直传 dataURL
+  const toTempFile = async (dataUrl: string): Promise<string> => {
+    if (typeof miniTool?.writeTempFile === 'function') {
       try {
-        if (typeof bridge.saveImageToPhotosAlbum === 'function') {
-          const ret = bridge.saveImageToPhotosAlbum({ data: url, url, filePath: url }, cb);
-          if (ret && typeof ret.then === 'function') ret.then(() => resolve(), reject);
-        } else if (typeof bridge.saveImageToAlbum === 'function') {
-          // dataURL 整体传入（URL / Base64 两种形态通吃）
-          const ret = bridge.saveImageToAlbum(url, cb);
-          if (ret && typeof ret.then === 'function') ret.then(() => resolve(), reject);
-        } else if (typeof bridge.saveImage === 'function') {
-          const ret = bridge.saveImage({ url, data: url }, cb);
-          if (ret && typeof ret.then === 'function') ret.then(() => resolve(), reject);
-        } else {
-          reject(new Error('no save api'));
-        }
-      } catch (e) {
-        reject(e);
+        const res = await miniTool.writeTempFile({ data: dataUrl });
+        if (res?.filePath) return res.filePath;
+      } catch {
+        /* 回退直传 dataURL（saveImageToPhotosAlbum 的 filePath 也接受 data: base64） */
       }
-    });
+    }
+    return dataUrl;
+  };
 
   const exportImage = async () => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || saving) return;
     const url = canvas.toDataURL('image/png');
 
-    // ① 容器桥接存相册（探测到才走）
-    const bridge = pickBridge();
-    if (bridge) {
+    // ① 小红书小工具：JSAPI 存入系统相册（需用户主动点击触发，首次会弹相册权限）
+    if (hasBridge) {
+      setSaving(true);
       try {
-        await callBridgeSave(bridge, url);
+        const filePath = await toTempFile(url);
+        await miniTool.saveImageToPhotosAlbum({ filePath });
         showTip('已存入系统相册 ✓');
-      } catch {
-        setPreviewUrl(url); // 桥接失败降级长按保存
+      } catch (err: any) {
+        showTip(err?.errMsg ? '保存失败，请检查相册权限' : '保存失败，请重试');
+      } finally {
+        setSaving(false);
       }
       return;
     }
 
-    // ② 移动端 WebView（含小红书小工具沙箱）：弹大图长按保存
-    if (isXhsEnv || isTouchWebView) {
+    // ② 普通移动端 WebView：弹大图长按保存（小工具容器内长按菜单被禁，不会走到这里）
+    if (isTouchWebView) {
       setPreviewUrl(url);
       return;
     }
@@ -226,6 +215,26 @@ export const TravelAlbumModal: React.FC = () => {
     a.href = url;
     a.download = `西湖游历图册_${Date.now()}.png`;
     a.click();
+  };
+
+  // 小工具额外端能力：把图册带入小红书笔记发布页（postNote，成功只代表发布页被唤起）
+  const shareAsNote = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas || saving || typeof miniTool?.postNote !== 'function') return;
+    setSaving(true);
+    try {
+      const imgUrl = await toTempFile(canvas.toDataURL('image/png'));
+      await miniTool.postNote({
+        title: '西湖十景 · 游历图册',
+        content: '在水墨体素的西湖里漫游，逐景盖印留影，集成一卷专属游历图册。',
+        tags: '#西湖十景 #数字艺术 #水墨',
+        mediaInfo: { image_resources: [{ url: imgUrl }] }
+      });
+    } catch {
+      showTip('未能唤起发布页，请重试');
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!isTravelAlbumOpen) return null;
@@ -259,13 +268,27 @@ export const TravelAlbumModal: React.FC = () => {
           <p className="text-xs text-[#555555]">
             💡 游览景点时按下“盖印”，即拍下当前视角并落印，收录为一页游历明信片。
           </p>
+          <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={exportImage}
-            className="btn-ink flex items-center gap-2 rounded-full font-semibold border-[#B83B32] text-[#B83B32]"
+            disabled={saving}
+            className="btn-ink flex items-center gap-2 rounded-full font-semibold border-[#B83B32] text-[#B83B32] disabled:opacity-50"
           >
             <Download className="w-4 h-4" />
-            <span>{hasBridge ? '存入相册' : isXhsEnv || isTouchWebView ? '保存画卷' : '导出全景画卷 PNG'}</span>
+            <span>{saving ? '处理中…' : hasBridge ? '存入相册' : isTouchWebView ? '保存画卷' : '导出全景画卷 PNG'}</span>
           </button>
+          {/* 小工具端能力：把图册带入小红书笔记发布页 */}
+          {typeof miniTool?.postNote === 'function' && (
+            <button
+              onClick={shareAsNote}
+              disabled={saving}
+              className="btn-ink flex items-center gap-2 rounded-full font-semibold border-[#3B6B5E] text-[#3B6B5E] disabled:opacity-50"
+            >
+              <Send className="w-4 h-4" />
+              <span>发布为笔记</span>
+            </button>
+          )}
+          </div>
         </div>
         {savedTip && (
           <p className="mt-2 text-right text-xs font-semibold text-[#3B6B5E]">{savedTip}</p>
