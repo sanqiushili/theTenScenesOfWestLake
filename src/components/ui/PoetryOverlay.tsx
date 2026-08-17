@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useWestLakeStore, WEST_LAKE_SCENES } from '../../store/useWestLakeStore';
+import { AliasModal } from './AliasModal';
 import { audioManager } from '../../audio/AudioManager';
 import { captureScenePhotoWithRetry, composeStampedPhoto } from '../../utils/scenePhoto';
 import { Sparkles, Thermometer, Sun, Bell, Droplets, Wind, Fish, Feather, Flower2, ChevronDown, ChevronUp, X } from 'lucide-react';
@@ -9,6 +10,9 @@ export const PoetryOverlay: React.FC = () => {
     currentScene,
     collectStamp,
     collectedStamps,
+    userAlias,
+    aliasSet,
+    setUserAlias,
     temperature,
     setTemperature,
     sunProgress,
@@ -26,6 +30,8 @@ export const PoetryOverlay: React.FC = () => {
   // 盖印后当场晒出的拍立得明信片（含印章），几秒后自动收起
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
   const [photoTip, setPhotoTip] = useState('');
+  // 首次盖印题名弹窗
+  const [showAliasModal, setShowAliasModal] = useState(false);
   const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     setCollapsed(false);
@@ -41,7 +47,7 @@ export const PoetryOverlay: React.FC = () => {
 
   // 盖印即拍照：抓下用户当前调好的视角，装裱成拍立得收入图册，
   // 并当场晒出给用户确认；已盖印再按一次即重拍覆盖
-  const handleStamp = async () => {
+  const doStamp = async () => {
     if (shooting) return;
     setShooting(true);
     setFlash(true);
@@ -55,12 +61,27 @@ export const PoetryOverlay: React.FC = () => {
       setTimeout(() => setPhotoTip(''), 2600);
       return;
     }
-    const photo = await composeStampedPhoto(raw, data).catch(() => raw);
+    const photo = await composeStampedPhoto(raw, data, userAlias).catch(() => raw);
     collectStamp(currentScene, photo);
     setPreviewPhoto(photo);
     if (previewTimer.current) clearTimeout(previewTimer.current);
     previewTimer.current = setTimeout(() => setPreviewPhoto(null), 7000);
     setShooting(false);
+  };
+
+  // 首次盖印先题名：把身份落进明信片，再真正盖印
+  const handleStamp = () => {
+    if (!aliasSet) {
+      setShowAliasModal(true);
+      return;
+    }
+    doStamp();
+  };
+
+  const handleAliasConfirm = (alias: string) => {
+    setUserAlias(alias);
+    setShowAliasModal(false);
+    doStamp();
   };
 
   // 收起态：缩成贴边小胶囊，仅保留展开入口，不遮挡画布交互区
@@ -304,6 +325,13 @@ export const PoetryOverlay: React.FC = () => {
         </div>
       </div>
     </div>
+
+      <AliasModal
+        open={showAliasModal}
+        initial={userAlias}
+        onConfirm={handleAliasConfirm}
+        onClose={() => setShowAliasModal(false)}
+      />
     </>
   );
 };

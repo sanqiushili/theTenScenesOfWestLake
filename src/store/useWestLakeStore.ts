@@ -1,5 +1,22 @@
 import { create } from 'zustand';
 
+// ── 个性化字段持久化（localStorage，沙箱不可用时静默降级）──
+const lsGet = (key: string, fallback: string): string => {
+  try {
+    const v = localStorage.getItem(key);
+    return v === null ? fallback : v;
+  } catch {
+    return fallback;
+  }
+};
+const lsSet = (key: string, value: string): void => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* 忽略：隐私模式 / 沙箱禁用 */
+  }
+};
+
 export type SceneId =
   | 'overview'
   | 'su_di'       // 苏堤春晓
@@ -222,8 +239,15 @@ interface WestLakeState {
   cloudFlow: number;        // 双峰插云云海流速 (0 ~ 1)
   fishFedCount: number;     // 花港观鱼投食次数
 
+  // 个性化（贴合小红书「和自己结合」的分享动机）
+  userAlias: string;        // 用户题名/别号（默认「西湖客」）
+  userHandbill: string | null; // 游历手札/口令（预设短句，null = 未选）
+  aliasSet: boolean;        // 是否已题名（决定是否首次盖印弹窗）     // 花港观鱼投食次数
+
   // Actions
   setCurrentScene: (scene: SceneId) => void;
+  setUserAlias: (alias: string) => void;
+  setUserHandbill: (line: string | null) => void;
   setTimeOfDay: (time: TimeOfDay) => void;
   setSeason: (season: Season) => void;
   collectStamp: (scene: SceneId, photo?: string) => void;
@@ -254,6 +278,11 @@ export const useWestLakeStore = create<WestLakeState>((set) => ({
   bellRungCount: 0,
   cloudFlow: 0.5,
   fishFedCount: 0,
+
+  // 个性化初始值（localStorage 持久化，返回用户保留身份）
+  userAlias: lsGet('wl_alias', '西湖客'),
+  userHandbill: lsGet('wl_handbill', '') || null,
+  aliasSet: lsGet('wl_aliasSet', 'false') === 'true',
 
   setCurrentScene: (scene) => set((state) => ({
     currentScene: scene,
@@ -289,5 +318,18 @@ export const useWestLakeStore = create<WestLakeState>((set) => ({
   setSunProgress: (progress) => set({ sunProgress: progress }),
   ringBell: () => set((state) => ({ bellRungCount: state.bellRungCount + 1 })),
   setCloudFlow: (flow) => set({ cloudFlow: flow }),
-  feedFish: () => set((state) => ({ fishFedCount: state.fishFedCount + 1 }))
+  feedFish: () => set((state) => ({ fishFedCount: state.fishFedCount + 1 })),
+
+  setUserAlias: (alias) =>
+    set(() => {
+      const clean = alias.trim() || '西湖客';
+      lsSet('wl_alias', clean);
+      lsSet('wl_aliasSet', 'true');
+      return { userAlias: clean, aliasSet: true };
+    }),
+  setUserHandbill: (line) =>
+    set(() => {
+      lsSet('wl_handbill', line ?? '');
+      return { userHandbill: line || null };
+    })
 }));

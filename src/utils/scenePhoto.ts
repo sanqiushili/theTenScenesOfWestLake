@@ -30,7 +30,7 @@ function isMostlyBlank(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D)
 }
 
 /** 抓取 R3F 主画布（data-engine 标记），等比压缩为 JPEG；黑帧返回 null */
-export function captureScenePhoto(maxWidth = 880): string | null {
+export function captureScenePhoto(maxWidth = 1280): string | null {
   const canvas = document.querySelector<HTMLCanvasElement>('canvas[data-engine]');
   if (!canvas || canvas.width === 0) return null;
   const scale = Math.min(1, maxWidth / canvas.width);
@@ -101,7 +101,8 @@ export function drawSeal(
  */
 export async function composeStampedPhoto(
   photoUrl: string,
-  data: SceneData
+  data: SceneData,
+  alias = '西湖客'
 ): Promise<string> {
   const img = await loadImage(photoUrl);
   const W = img.width;
@@ -125,16 +126,20 @@ export async function composeStampedPhoto(
   ctx.lineWidth = 1;
   ctx.strokeRect(margin + 0.5, margin + 0.5, photoW - 1, photoH - 1);
 
-  // 底部落款：书法景名 + 游历日期
+  // 底部落款：书法景名 + 题名（用户别号）+ 游历日期
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#2C2C2C';
-  ctx.font = `${Math.round(bottom * 0.34)}px "Ma Shan Zheng", "Noto Serif SC", serif`;
-  ctx.fillText(data.name, margin + 4, margin + photoH + bottom * 0.36);
+  ctx.font = `${Math.round(bottom * 0.32)}px "Ma Shan Zheng", "Noto Serif SC", serif`;
+  ctx.fillText(data.name, margin + 4, margin + photoH + bottom * 0.30);
+  // 用户题名：把「自己」落进明信片
+  ctx.fillStyle = '#555555';
+  ctx.font = `${Math.round(bottom * 0.24)}px "Noto Serif SC", serif`;
+  ctx.fillText(`题 · ${alias}`, margin + 6, margin + photoH + bottom * 0.60);
   const date = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
   ctx.fillStyle = '#8A8A8A';
-  ctx.font = `${Math.round(bottom * 0.2)}px "Noto Serif SC", serif`;
-  ctx.fillText(date, margin + 6, margin + photoH + bottom * 0.74);
+  ctx.font = `${Math.round(bottom * 0.18)}px "Noto Serif SC", serif`;
+  ctx.fillText(date, margin + 6, margin + photoH + bottom * 0.84);
 
   // 朱砂印章斜压在照片右下角，一半压照片一半压留白
   const sealSize = Math.round(W * 0.12);
