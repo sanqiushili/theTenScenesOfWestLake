@@ -1,6 +1,8 @@
 // 体素西湖 · 调色板
 // 一套柔和而饱和度分层的「青绿山水 × 玩具积木」体素配色
 
+import type { Season } from '../store/useWestLakeStore';
+
 export const PAL = {
   // 水色
   waterDeep: '#2E7D8C',
@@ -81,6 +83,80 @@ export const PAL = {
   nightLantern: '#FFC55A',
   candle: '#FFD479'
 } as const;
+
+// ------------------------------------------------------------------
+// 全景沙盘的季节「换装」：不做全屏滤镜，而是直接重映射植被与地表体素色。
+// 春为基准色（不重映射），夏/秋/冬各自一张 remap 表。
+// ------------------------------------------------------------------
+
+export const SEASON_WORLD_REMAP: Record<Season, Record<string, string>> = {
+  // 春：桃红柳绿，即基准配色
+  spring: {},
+
+  // 夏：草木蓊郁加深，桃花谢作绿叶，荷叶正盛
+  summer: {
+    [PAL.grass]: '#7FB054',
+    [PAL.grassLight]: '#9BC468',
+    [PAL.grassDark]: '#5D8C43',
+    [PAL.moss]: '#4E7A46',
+    [PAL.willow]: '#83B25E',
+    [PAL.willowDark]: '#668F48',
+    [PAL.pine]: '#356045',
+    [PAL.pineDark]: '#274A36',
+    [PAL.peachPink]: '#6FA85E',
+    [PAL.peachDeep]: '#4E8048'
+  },
+
+  // 秋：草木染金，柳丝枯黄，残荷听雨
+  autumn: {
+    [PAL.grass]: '#C9A84F',
+    [PAL.grassLight]: '#D8BC6A',
+    [PAL.grassDark]: '#A98C3E',
+    [PAL.moss]: '#8A7A3E',
+    [PAL.willow]: '#C9A44A',
+    [PAL.willowDark]: '#A8853A',
+    [PAL.peachPink]: '#D98E4A',
+    [PAL.peachDeep]: '#C06A32',
+    [PAL.lotusLeaf]: '#8A6B42',
+    [PAL.lotusLeafDark]: '#6E5334',
+    [PAL.lotusPink]: '#9C7A56',
+    [PAL.lotusDeep]: '#82553E',
+    [PAL.lotusSeed]: '#B99B4E',
+    [PAL.sand]: '#E3C98F',
+    [PAL.sandDark]: '#D0B273'
+  },
+
+  // 冬：雪覆湖山，柳荷俱枯，唯寒梅著花（梅色不映射）
+  winter: {
+    [PAL.grass]: PAL.snow,
+    [PAL.grassLight]: '#FFFFFF',
+    [PAL.grassDark]: PAL.snow,
+    [PAL.moss]: PAL.snowShadow,
+    [PAL.sand]: '#FFFFFF',
+    [PAL.sandDark]: PAL.snow,
+    [PAL.rock]: '#B4BAC2',
+    [PAL.rockDark]: '#96A0AC',
+    [PAL.dirt]: '#8F8A84',
+    [PAL.willow]: '#8A7558',
+    [PAL.willowDark]: '#6B5842',
+    [PAL.peachPink]: PAL.snow,
+    [PAL.peachDeep]: PAL.snowShadow,
+    [PAL.goldBright]: PAL.snowShadow,
+    [PAL.lotusLeaf]: '#6E5334',
+    [PAL.lotusLeafDark]: '#5A452C',
+    [PAL.lotusPink]: '#8A6B42',
+    [PAL.lotusDeep]: '#6E5334',
+    [PAL.lotusSeed]: '#8A6B42'
+  }
+};
+
+/** 四季湖面色阶（宝石拼块三档） */
+export const SEASON_WATER: Record<Season, string[]> = {
+  spring: ['#3E8E9C', '#5FB3BF', '#8FD0D2'],
+  summer: ['#256E7A', '#3E93A0', '#6FBBC0'],
+  autumn: ['#35707E', '#4E929B', '#79B7B7'],
+  winter: ['#5E8B96', '#7FA6AD', '#A3C4C9']
+};
 
 // 各时辰的天空 / 雾色 / 光照预设
 export interface SkyPreset {

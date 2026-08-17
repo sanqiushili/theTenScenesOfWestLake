@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { useWestLakeStore, WEST_LAKE_SCENES, SceneId } from '../../store/useWestLakeStore';
 import { audioManager } from '../../audio/AudioManager';
 import { VoxelBuilder, VoxelMesh, VoxelWater, lakeCells } from '../../voxel/VoxelKit';
-import { PAL } from '../../voxel/palette';
+import { PAL, SEASON_WORLD_REMAP, SEASON_WATER } from '../../voxel/palette';
 import {
   makeWillow, makePeach, makePine, makePlum, makeBareTree,
   makeHill, makePagoda, makeStoneTower, makePavilion, makeArchBridge,
@@ -186,6 +186,20 @@ function buildWorld(): VoxelBuilder {
   return b;
 }
 
+/**
+ * 季节换装：不重建几何，而是按 remap 表把基准世界的体素色整批替换。
+ * 位置/形状逐体素不变，切季无闪烁；发光体素（灯火塔影）保持原色。
+ */
+function remapSeason(src: VoxelBuilder, remap: Record<string, string>): VoxelBuilder {
+  const out = new VoxelBuilder();
+  for (const g of src.getGroups()) {
+    const color = remap[g.color] ?? g.color;
+    const opts = g.emissive ? { emissive: g.emissive, emissiveIntensity: g.emissiveIntensity } : undefined;
+    for (const [x, y, z] of g.voxels) out.set(x, y, z, color, opts);
+  }
+  return out;
+}
+
 /* ------------------------------------------------------------------ */
 /*  场景标记（浮空朱砂印章 + 名称牌）                                   */
 /* ------------------------------------------------------------------ */
@@ -295,10 +309,16 @@ const DriftingBoat: React.FC<{ radius: number; phase: number; speed: number; off
 /* ------------------------------------------------------------------ */
 
 export const OverviewScene: React.FC = () => {
-  const { currentScene } = useWestLakeStore();
+  const { currentScene, season } = useWestLakeStore();
   const cloudsGroupRef = useRef<THREE.Group>(null!);
 
-  const world = useMemo(() => buildWorld(), []);
+  // 基准世界只构建一次（春态），其余季节通过色表换装，避免随机布局随季节抖动
+  const baseWorld = useMemo(() => buildWorld(), []);
+  const world = useMemo(() => {
+    const remap = SEASON_WORLD_REMAP[season];
+    return Object.keys(remap).length === 0 ? baseWorld : remapSeason(baseWorld, remap);
+  }, [baseWorld, season]);
+  const waterColors = SEASON_WATER[season];
 
   const lakeWaterCells = useMemo(() => lakeCells(LAKE_RX, LAKE_RZ, 0.8), []);
   const pondWaterCells = useMemo(() => {
@@ -337,9 +357,9 @@ export const OverviewScene: React.FC = () => {
       <VoxelMesh builder={world} />
 
       {/* 西湖水面 */}
-      <VoxelWater cells={lakeWaterCells} y={0} amplitude={0.26} speed={1} />
+      <VoxelWater cells={lakeWaterCells} y={0} amplitude={0.26} speed={1} colors={waterColors} />
       {/* 花港池塘水面 */}
-      <VoxelWater cells={pondWaterCells} y={-0.4} amplitude={0.14} speed={1.3} />
+      <VoxelWater cells={pondWaterCells} y={-0.4} amplitude={0.14} speed={1.3} colors={waterColors} />
 
       {/* 高空流云 */}
       <group ref={cloudsGroupRef} position={[0, 30, 0]}>

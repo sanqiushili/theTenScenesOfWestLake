@@ -148,11 +148,11 @@ body::before {
   z-index: 1;
 }
 
-/* 印章风格样式 */
+/* 印章风格样式：只管外形（书法字 + 边框 + 内晕），
+   文字/边框颜色由 Tailwind 工具类控制（未盖印朱字白底，盖印后白字红底） */
 .stamp-seal {
   font-family: var(--font-calligraphy);
-  border: 2px solid var(--color-cinnabar);
-  color: var(--color-cinnabar);
+  border: 2px solid currentColor;
   border-radius: 4px;
   display: inline-flex;
   align-items: center;

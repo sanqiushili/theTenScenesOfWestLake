@@ -44,10 +44,12 @@ export const HuaGangGuanYu: React.FC = () => {
     return b;
   }, []);
 
-  // 锦鲤群（实例化身体 + 尾）
+  // 锦鲤群（实例化身体 + 尾）：转向式漫游，每条鱼有独立的巡航节奏与摆尾相位
   const { bodyMesh, tailMesh, kois } = useMemo(() => {
     const bodyGeom = new THREE.BoxGeometry(1.7, 0.5, 0.6);
+    // 尾鳍几何原点平移到连接处，旋转时绕尾根摆动而非自身中心
     const tailGeom = new THREE.BoxGeometry(0.5, 0.4, 0.7);
+    tailGeom.translate(-0.25, 0, 0);
     const mat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.5, flatShading: true });
     const bm = new THREE.InstancedMesh(bodyGeom, mat, KOI_COUNT);
     const tm = new THREE.InstancedMesh(tailGeom, mat.clone(), KOI_COUNT);
@@ -57,12 +59,23 @@ export const HuaGangGuanYu: React.FC = () => {
       c.set(color);
       bm.setColorAt(i, c);
       tm.setColorAt(i, c.set(color).multiplyScalar(0.85));
+      // 随机散布在池内，朝向各异
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.sqrt(Math.random()) * 15;
       return {
-        radius: 4 + Math.random() * 13,
-        angle: Math.random() * Math.PI * 2,
-        speed: (0.25 + Math.random() * 0.4) * (Math.random() > 0.5 ? 1 : -1),
-        hopPhase: Math.random() * Math.PI * 2,
-        hopFreq: 0.3 + Math.random() * 0.4
+        x: Math.cos(a) * r,
+        z: Math.sin(a) * r,
+        heading: Math.random() * Math.PI * 2,   // 实际游动朝向（= 速度方向）
+        cruise: 1.1 + Math.random() * 1.1,      // 巡航速度
+        speedFreq: 0.22 + Math.random() * 0.2,  // 缓行↔疾游的呼吸节奏
+        speedPhase: Math.random() * Math.PI * 2,
+        wanderFreq: 0.5 + Math.random() * 0.5,  // 摆头转弯频率
+        wanderPhase: Math.random() * Math.PI * 2,
+        turnDir: Math.random() > 0.5 ? 1 : -1,  // 每尾鱼偏爱的回旋方向
+        wagPhase: Math.random() * Math.PI * 2,
+        wag: 0,
+        hopFreq: 0.2 + Math.random() * 0.13,    // 跃水周期（约 15~31s 一次）
+        hopPhase: Math.random() * Math.PI * 2
       };
     });
     if (bm.instanceColor) bm.instanceColor.needsUpdate = true;
@@ -86,7 +99,9 @@ export const HuaGangGuanYu: React.FC = () => {
     return out;
   }, []);
 
-  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const bodyDummy = useMemo(() => new THREE.Object3D(), []);
+  const tailDummy = useMemo(() => new THREE.Object3D(), []);
+  const feedEnergyRef = useRef(0);
 
   const handleFeed = (x: number, z: number) => {
     feedPointRef.current.set(x, 0, z);
@@ -95,49 +110,88 @@ export const HuaGangGuanYu: React.FC = () => {
     feedFish();
   };
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
     const t = state.clock.getElapsedTime();
+    const dt = Math.min(delta, 0.05);
     const sinceFeed = performance.now() / 1000 - feedTimeRef.current;
-    const feeding = sinceFeed < 5;
+    // 投食兴奋度：攻击时缓升、结束后缓降，聚散都不突跳
+    const feedTarget = sinceFeed < 6 ? 1 : 0;
+    feedEnergyRef.current += (feedTarget - feedEnergyRef.current) * Math.min(1, dt * (feedTarget ? 2.5 : 0.7));
+    const energy = feedEnergyRef.current;
 
     kois.forEach((k, i) => {
-      // 投食时加速聚拢
-      let speed = k.speed;
-      let cx = 0;
-      let cz = 0;
-      if (feeding) {
-        speed = k.speed * 2.6;
-        cx = feedPointRef.current.x * 0.75;
-        cz = feedPointRef.current.z * 0.75;
+      /* --- 转向：漫游摆头 + 池岸回转 + 投食趋食 --- */
+      const wander = Math.sin(t * k.wanderFreq + k.wanderPhase) * 0.9 * k.turnDir;
+      let steer = wander;
+
+      // 近岸柔和回转，绝不撞岸急折
+      const dist = Math.hypot(k.x, k.z);
+      if (dist > 16.5) {
+        const inward = Math.atan2(-k.z, -k.x);
+        let d = inward - k.heading;
+        d = Math.atan2(Math.sin(d), Math.cos(d));
+        steer += d * Math.min(3, (dist - 16.5) * 1.6);
       }
-      k.angle += speed * 0.016;
-      const x = cx + Math.cos(k.angle) * k.radius * (feeding ? 0.45 : 1);
-      const z = cz + Math.sin(k.angle) * k.radius * 0.85 * (feeding ? 0.45 : 1);
-      // 偶尔跃出水面（投食时更欢腾）
-      const hop = Math.max(0, Math.sin(t * k.hopFreq * 2 + k.hopPhase));
-      const hopAmp = feeding ? 1.6 : 0.7;
-      const y = -0.3 + Math.pow(hop, 3) * hopAmp;
+      // 轻微环池巡游偏向，走姿更像池鲤而非无头苍蝇
+      steer += 0.1 * k.turnDir;
 
-      const dir = Math.atan2(Math.cos(k.angle) * Math.sign(k.speed), -Math.sin(k.angle) * Math.sign(k.speed));
-      dummy.position.set(x, y, z);
-      dummy.rotation.set(0, -k.angle + (k.speed > 0 ? 0 : Math.PI), Math.sin(t * 2 + i) * 0.1);
-      void dir;
-      dummy.updateMatrix();
-      if (bodyMeshRef.current) bodyMeshRef.current.setMatrixAt(i, dummy.matrix);
+      // 投食：朝食点转向 + 到达后绕食点小圈巡游，各自留岍位不叠成一点
+      if (energy > 0.02) {
+        const fx = feedPointRef.current.x * 0.8;
+        const fz = feedPointRef.current.z * 0.8;
+        const offA = k.wanderPhase;
+        const tx = fx + Math.cos(offA) * 2.4;
+        const tz = fz + Math.sin(offA) * 2.4;
+        const toFood = Math.atan2(tz - k.z, tx - k.x);
+        let d = toFood - k.heading;
+        d = Math.atan2(Math.sin(d), Math.cos(d));
+        steer = THREE.MathUtils.lerp(steer, d * 2.4, energy);
+      }
+      k.heading += steer * dt;
 
-      // 尾部跟随（简化：同位置后移）
-      dummy.position.x -= Math.cos(k.angle) * 1.1 * Math.sign(k.speed);
-      dummy.position.z -= Math.sin(k.angle) * 1.1 * Math.sign(k.speed);
-      dummy.rotation.z = Math.sin(t * 6 + i) * 0.5;
-      dummy.updateMatrix();
-      if (tailMeshRef.current) tailMeshRef.current.setMatrixAt(i, dummy.matrix);
+      /* --- 速度：巡航呼吸节奏 + 投食冲刺 --- */
+      let speed = k.cruise * (0.55 + 0.45 * Math.sin(t * k.speedFreq + k.speedPhase));
+      speed *= 1 + energy * 1.9;
+      speed = Math.max(0.3, speed);
+      k.x += Math.cos(k.heading) * speed * dt;
+      k.z += Math.sin(k.heading) * speed * dt;
+
+      /* --- 垂直：贴水缓游 + 偶尔跃出（稀疏、抛物线、带俯仰） --- */
+      let y = -0.32 + Math.sin(t * 0.9 + k.speedPhase) * 0.07;
+      let pitch = 0;
+      const hopWin = Math.sin(t * k.hopFreq + k.hopPhase);
+      if (hopWin > 0.96) {
+        const u = (hopWin - 0.96) / 0.04; // 0→1→0
+        const arc = Math.sin(u * Math.PI);
+        y += arc * (1.0 + energy * 0.7);
+        const vy = Math.cos(u * Math.PI);
+        pitch = -vy * 0.55; // 出水仰头、入水俯冲
+      }
+
+      /* --- 身体：朝向=速度方向，摆头与转向同源 --- */
+      bodyDummy.position.set(k.x, y, k.z);
+      bodyDummy.rotation.set(pitch, -k.heading, wander * 0.08);
+      bodyDummy.updateMatrix();
+      if (bodyMeshRef.current) bodyMeshRef.current.setMatrixAt(i, bodyDummy.matrix);
+
+      /* --- 尾鳍：摆频随游速（游得快摆得急），尾根跟随身体朝向 --- */
+      const wagTarget = Math.sin(t * (3.5 + speed * 2.8) + k.wagPhase) * (0.3 + speed * 0.1);
+      k.wag += (wagTarget - k.wag) * Math.min(1, dt * 14);
+      tailDummy.position.set(
+        k.x - Math.cos(k.heading) * 1.02,
+        y,
+        k.z - Math.sin(k.heading) * 1.02
+      );
+      tailDummy.rotation.set(pitch * 0.6, -(k.heading - k.wag), 0);
+      tailDummy.updateMatrix();
+      if (tailMeshRef.current) tailMeshRef.current.setMatrixAt(i, tailDummy.matrix);
     });
     if (bodyMeshRef.current) bodyMeshRef.current.instanceMatrix.needsUpdate = true;
     if (tailMeshRef.current) tailMeshRef.current.instanceMatrix.needsUpdate = true;
 
     // 投食涟漪
     if (rippleRef.current) {
-      if (feeding) {
+      if (energy > 0.05) {
         const s = 1 + (sinceFeed % 1.2) * 6;
         rippleRef.current.visible = true;
         rippleRef.current.position.set(feedPointRef.current.x, 0.15, feedPointRef.current.z);

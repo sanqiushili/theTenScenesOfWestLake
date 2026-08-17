@@ -1,5 +1,5 @@
 import React from 'react';
-import { useWestLakeStore, TimeOfDay, Season, ALL_SCENE_IDS } from '../../store/useWestLakeStore';
+import { useWestLakeStore, TimeOfDay, Season, ALL_SCENE_IDS, WEST_LAKE_SCENES } from '../../store/useWestLakeStore';
 import { audioManager } from '../../audio/AudioManager';
 import { Volume2, VolumeX, Compass, Calendar, Sun, Moon, Sunrise, Sunset, BookOpen } from 'lucide-react';
 
@@ -30,6 +30,15 @@ export const HeaderNavigation: React.FC = () => {
     { id: 'autumn', label: '秋月' },
     { id: 'winter', label: '冬雪' }
   ];
+
+  // 十景各有专属季节（如断桥残雪只在冬），季节流转仅属于全景总览
+  const isOverview = currentScene === 'overview';
+
+  // 时辰也由景致本身决定：如雷峰夕照只能斜阳、三潭印月只能静夜；
+  // 仅一个合理时辰的场景直接不展示切换器
+  const visibleTimes = isOverview
+    ? times
+    : times.filter((t) => WEST_LAKE_SCENES[currentScene].allowedTimes.includes(t.id));
 
   return (
     <header className="fixed top-0 left-0 w-full z-[80] px-3 sm:px-6 py-3 sm:py-4 flex flex-col md:flex-row items-center md:justify-between gap-2 md:gap-0 pointer-events-auto pt-[max(0.75rem,env(safe-area-inset-top))] md:pt-4">
@@ -78,11 +87,16 @@ export const HeaderNavigation: React.FC = () => {
         </div>
       </div>
 
-      {/* 中间：时辰与四季无缝流转控制器（移动端为紧凑第二行，功能完整保留） */}
+      {/* 中间：时辰（按景致限定）与四季（仅总览）流转控制器，移动端为紧凑第二行 */}
+      {visibleTimes.length > 1 && (
       <div className="flex items-center gap-2 sm:gap-6 glass-ink-panel px-3 sm:px-6 py-1.5 sm:py-2 rounded-full max-w-full overflow-x-auto">
         {/* 时辰轮播 */}
-        <div className="flex items-center gap-0.5 sm:gap-1 border-r border-[#2C2C2C]/15 pr-2 sm:pr-5 shrink-0">
-          {times.map((t) => (
+        <div
+          className={`flex items-center gap-0.5 sm:gap-1 shrink-0 ${
+            isOverview ? 'border-r border-[#2C2C2C]/15 pr-2 sm:pr-5' : ''
+          }`}
+        >
+          {visibleTimes.map((t) => (
             <button
               key={t.id}
               onClick={() => setTimeOfDay(t.id)}
@@ -98,24 +112,27 @@ export const HeaderNavigation: React.FC = () => {
           ))}
         </div>
 
-        {/* 四季轮播 */}
-        <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
-          <Calendar className="w-4 h-4 text-[#7BA07A] mr-0.5 sm:mr-1" />
-          {seasons.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setSeason(s.id)}
-              className={`px-2 sm:px-3 py-1 text-xs rounded-full transition-all cursor-pointer ${
-                season === s.id
-                  ? 'bg-[#3B6B5E] text-[#F4F1EA] shadow'
-                  : 'text-[#555555] hover:text-[#2C2C2C] hover:bg-[#2C2C2C]/5'
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
+        {/* 四季轮播：仅全景总览可见 */}
+        {isOverview && (
+          <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+            <Calendar className="w-4 h-4 text-[#7BA07A] mr-0.5 sm:mr-1" />
+            {seasons.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => setSeason(s.id)}
+                className={`px-2 sm:px-3 py-1 text-xs rounded-full transition-all cursor-pointer ${
+                  season === s.id
+                    ? 'bg-[#3B6B5E] text-[#F4F1EA] shadow'
+                    : 'text-[#555555] hover:text-[#2C2C2C] hover:bg-[#2C2C2C]/5'
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+      )}
 
       {/* 右侧：导出图册与音量控制（桌面端） */}
       <div className="hidden md:flex items-center gap-3">
@@ -124,7 +141,7 @@ export const HeaderNavigation: React.FC = () => {
             audioManager.playStampSound();
             setTravelAlbumOpen(true);
           }}
-          className="flex items-center gap-2 stamp-seal px-4 py-2 text-sm font-semibold cursor-pointer shadow-md bg-[#F4F1EA]"
+          className="flex items-center gap-2 stamp-seal px-4 py-2 text-sm font-semibold cursor-pointer shadow-md bg-[#F4F1EA] text-[#B83B32]"
         >
           <BookOpen className="w-4 h-4 text-[#B83B32]" />
           <span>游历图册 ({collectedStamps.size}/{ALL_SCENE_IDS.length})</span>

@@ -9,6 +9,13 @@ shots/
 *.log
 .playwright-cli/
 
+# 小红书小工具打包产物与 skill 文档
+.skill/
+minitool/
+minitool-dist/
+minitool.zip
+minitool-assets/
+
 # 编辑器与系统文件
 .DS_Store
 .idea/

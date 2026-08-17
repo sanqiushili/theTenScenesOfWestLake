@@ -22,6 +22,8 @@ export interface SceneData {
   pinyin: string;
   season: Season;
   defaultTime: TimeOfDay;
+  /** 该景可切换的时辰：景致本身决定（如雷峰夕照只能斜阳、三潭印月只能静夜） */
+  allowedTimes: TimeOfDay[];
   poem: string;
   poet: string;
   dynasty: string;
@@ -39,6 +41,7 @@ export const WEST_LAKE_SCENES: Record<Exclude<SceneId, 'overview'>, SceneData> =
     pinyin: 'Sū Dī Chūn Xiǎo',
     season: 'spring',
     defaultTime: 'dawn',
+    allowedTimes: ['dawn'],
     poem: '饮湖上初晴后雨二首·其二',
     poet: '苏轼',
     dynasty: '宋',
@@ -54,6 +57,7 @@ export const WEST_LAKE_SCENES: Record<Exclude<SceneId, 'overview'>, SceneData> =
     pinyin: 'Qū Yuàn Fēng Hé',
     season: 'summer',
     defaultTime: 'noon',
+    allowedTimes: ['dawn', 'noon'],
     poem: '晓出净慈寺送林子方',
     poet: '杨万里',
     dynasty: '宋',
@@ -69,6 +73,7 @@ export const WEST_LAKE_SCENES: Record<Exclude<SceneId, 'overview'>, SceneData> =
     pinyin: 'Sān Tán Yìn Yuè',
     season: 'autumn',
     defaultTime: 'night',
+    allowedTimes: ['night'],
     poem: '三潭印月',
     poet: '张岱',
     dynasty: '明',
@@ -84,6 +89,7 @@ export const WEST_LAKE_SCENES: Record<Exclude<SceneId, 'overview'>, SceneData> =
     pinyin: 'Duàn Qiáo Cán Xuě',
     season: 'winter',
     defaultTime: 'dawn',
+    allowedTimes: ['dawn', 'noon', 'sunset', 'night'],
     poem: '钱塘湖春行',
     poet: '白居易',
     dynasty: '唐',
@@ -99,6 +105,7 @@ export const WEST_LAKE_SCENES: Record<Exclude<SceneId, 'overview'>, SceneData> =
     pinyin: 'Liǔ Làng Wén Yīng',
     season: 'spring',
     defaultTime: 'dawn',
+    allowedTimes: ['dawn', 'noon', 'sunset'],
     poem: '钱塘湖春行',
     poet: '白居易',
     dynasty: '唐',
@@ -114,6 +121,7 @@ export const WEST_LAKE_SCENES: Record<Exclude<SceneId, 'overview'>, SceneData> =
     pinyin: 'Shuāng Fēng Chā Yún',
     season: 'autumn',
     defaultTime: 'dawn',
+    allowedTimes: ['dawn', 'noon', 'sunset'],
     poem: '六月二十七日望湖楼醉书',
     poet: '苏轼',
     dynasty: '宋',
@@ -129,6 +137,7 @@ export const WEST_LAKE_SCENES: Record<Exclude<SceneId, 'overview'>, SceneData> =
     pinyin: 'Léi Fēng Xī Zhào',
     season: 'autumn',
     defaultTime: 'sunset',
+    allowedTimes: ['sunset'],
     poem: '雷峰夕照',
     poet: '林景熙',
     dynasty: '宋',
@@ -144,6 +153,7 @@ export const WEST_LAKE_SCENES: Record<Exclude<SceneId, 'overview'>, SceneData> =
     pinyin: 'Nán Píng Wǎn Zhōng',
     season: 'autumn',
     defaultTime: 'sunset',
+    allowedTimes: ['sunset', 'night'],
     poem: '南屏晚钟',
     poet: '陈潦',
     dynasty: '宋',
@@ -159,6 +169,7 @@ export const WEST_LAKE_SCENES: Record<Exclude<SceneId, 'overview'>, SceneData> =
     pinyin: 'Líng Fēng Tàn Méi',
     season: 'winter',
     defaultTime: 'sunset',
+    allowedTimes: ['sunset', 'night'],
     poem: '山园小梅',
     poet: '林逋',
     dynasty: '宋',
@@ -174,6 +185,7 @@ export const WEST_LAKE_SCENES: Record<Exclude<SceneId, 'overview'>, SceneData> =
     pinyin: 'Huā Gǎng Guān Yú',
     season: 'spring',
     defaultTime: 'noon',
+    allowedTimes: ['dawn', 'noon', 'sunset'],
     poem: '观游鱼',
     poet: '白居易',
     dynasty: '唐',
@@ -236,21 +248,13 @@ export const useWestLakeStore = create<WestLakeState>((set) => ({
   cloudFlow: 0.5,
   fishFedCount: 0,
 
-  setCurrentScene: (scene) => set((state) => {
-    let defaultTime = state.timeOfDay;
-    let defaultSeason = state.season;
-    if (scene !== 'overview') {
-      const data = WEST_LAKE_SCENES[scene];
-      defaultTime = data.defaultTime;
-      defaultSeason = data.season;
-    }
-    return {
-      currentScene: scene,
-      timeOfDay: defaultTime,
-      season: defaultSeason,
-      scrollProgress: 0
-    };
-  }),
+  setCurrentScene: (scene) => set((state) => ({
+    currentScene: scene,
+    // 季节流转仅属于全景总览：进子场景不再改写全局季节，
+    // 避免游完断桥残雪回到总览时整个西湖仍是冬态；时辰则跟随各景最佳观赏时段
+    timeOfDay: scene !== 'overview' ? WEST_LAKE_SCENES[scene].defaultTime : state.timeOfDay,
+    scrollProgress: 0
+  })),
 
   setTimeOfDay: (time) => set({ timeOfDay: time }),
   setSeason: (season) => set({ season }),

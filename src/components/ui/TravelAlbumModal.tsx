@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { useWestLakeStore, WEST_LAKE_SCENES, ALL_SCENE_IDS } from '../../store/useWestLakeStore';
 import { X, Download, Award } from 'lucide-react';
 
@@ -101,11 +101,32 @@ export const TravelAlbumModal: React.FC = () => {
     }
   }, [isTravelAlbumOpen, collectedStamps]);
 
-  // 导出 PNG
-  const exportImage = () => {
+  // 导出 PNG：浏览器端走文件下载；小红书小工具容器内改走 JSBridge 存入系统相册
+  const isXhsMiniTool = typeof window !== 'undefined' && !!(window as any).xhs?.miniTool;
+  const [savedTip, setSavedTip] = useState('');
+
+  const exportImage = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const url = canvas.toDataURL('image/png');
+
+    const bridge = (window as any).xhs?.miniTool;
+    if (bridge?.saveImageToPhotosAlbum) {
+      try {
+        // 容器禁止 a[download]，经 writeTempFile 换本地路径后存相册
+        const { filePath } = bridge.writeTempFile
+          ? await bridge.writeTempFile({ data: url })
+          : { filePath: url };
+        await bridge.saveImageToPhotosAlbum({ filePath });
+        setSavedTip('已存入系统相册 ✓');
+        setTimeout(() => setSavedTip(''), 2500);
+      } catch {
+        setSavedTip('保存失败，请检查相册权限');
+        setTimeout(() => setSavedTip(''), 2500);
+      }
+      return;
+    }
+
     const a = document.createElement('a');
     a.href = url;
     a.download = `西湖游历图册_${Date.now()}.png`;
@@ -148,9 +169,12 @@ export const TravelAlbumModal: React.FC = () => {
             className="btn-ink flex items-center gap-2 rounded-full font-semibold border-[#B83B32] text-[#B83B32]"
           >
             <Download className="w-4 h-4" />
-            <span>导出全景画卷 PNG</span>
+            <span>{isXhsMiniTool ? '存入相册' : '导出全景画卷 PNG'}</span>
           </button>
         </div>
+        {savedTip && (
+          <p className="mt-2 text-right text-xs font-semibold text-[#3B6B5E]">{savedTip}</p>
+        )}
       </div>
     </div>
   );

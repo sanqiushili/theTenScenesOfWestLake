@@ -4,9 +4,9 @@ import { PAL } from '../../voxel/palette';
 import { useWestLakeStore, Season } from '../../store/useWestLakeStore';
 
 /**
- * 全局季节粒子：随顶部季节切换在整个西湖沙盘上空飘落，
- * 总览与十景子场景都能感受到季节氛围。
- * 数量控制在 300 以内，与场景自身粒子叠加后仍是轻量级。
+ * 季节粒子只属于全景总览：十景各有专属季节（如断桥残雪只在冬），
+ * 子场景内不再叠加全局季节粒子，季节流转仅作用于沙盘与湖面。
+ * 数量控制在 300 以内，轻量级。
  */
 const SEASON_PARTICLES: Record<
   Season,
@@ -24,7 +24,10 @@ const SEASON_PARTICLES: Record<
 
 export const SeasonParticles: React.FC = () => {
   const season = useWestLakeStore((s) => s.season);
+  const currentScene = useWestLakeStore((s) => s.currentScene);
   const cfg = SEASON_PARTICLES[season];
+
+  if (currentScene !== 'overview') return null;
 
   return (
     <VoxelParticles
