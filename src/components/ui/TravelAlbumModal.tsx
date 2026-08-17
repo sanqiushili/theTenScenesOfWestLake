@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useWestLakeStore, WEST_LAKE_SCENES, ALL_SCENE_IDS, SceneId } from '../../store/useWestLakeStore';
 import { loadImage } from '../../utils/scenePhoto';
-import { X, Download, Award } from 'lucide-react';
+import { X, Download, Award, Image as ImageIcon } from 'lucide-react';
 
 export const TravelAlbumModal: React.FC = () => {
   const { isTravelAlbumOpen, setTravelAlbumOpen, collectedStamps, scenePhotos } = useWestLakeStore();
@@ -149,32 +149,79 @@ export const TravelAlbumModal: React.FC = () => {
     }
   }, [isTravelAlbumOpen, collectedStamps, scenePhotos]);
 
-  // 导出 PNG：浏览器端走文件下载；小红书小工具容器内改走 JSBridge 存入系统相册
-  const isXhsMiniTool = typeof window !== 'undefined' && !!(window as any).xhs?.miniTool;
+  // ── 导出保存兼容 ──
+  // 小红书「小工具」是纯离线 Web 沙箱：无官方 JSBridge、禁 a[download]、禁外链。
+  // 三级降级链：① 容器若开放桥接则调原生存相册；
+  //            ② 移动端 WebView（小红书 App 内等）弹大图引导长按保存——与小红书笔记原生保存习惯一致；
+  //            ③ 桌面浏览器走 a[download] 文件下载。
+  const w = typeof window !== 'undefined' ? (window as any) : undefined;
+  const isXhsEnv = !!w && /xhs/i.test(w.navigator?.userAgent || '');
+  const isTouchWebView = !!w && ('ontouchstart' in w || (w.navigator?.maxTouchPoints ?? 0) > 0);
   const [savedTip, setSavedTip] = useState('');
+  const [previewUrl, setPreviewUrl] = useState('');
+
+  const showTip = (msg: string) => {
+    setSavedTip(msg);
+    setTimeout(() => setSavedTip(''), 2500);
+  };
+
+  // 探测容器桥接（多命名空间，兼容 Promise 式/回调式 API；沙箱未开放时均为 undefined）
+  const pickBridge = () => {
+    const candidates = [w?.xhs?.miniTool, w?.xhsmini, w?.XhsMiniTool, w?.jsBridge, w?.JSBridge];
+    return (
+      candidates.find(
+        (b) => b && (b.saveImageToPhotosAlbum || b.saveImageToAlbum || b.saveImage)
+      ) || null
+    );
+  };
+  const hasBridge = !!pickBridge();
+
+  const callBridgeSave = (bridge: any, url: string): Promise<void> =>
+    new Promise((resolve, reject) => {
+      const cb = (res: any) => (res === false ? reject(new Error('save failed')) : resolve());
+      try {
+        if (typeof bridge.saveImageToPhotosAlbum === 'function') {
+          const ret = bridge.saveImageToPhotosAlbum({ data: url, url, filePath: url }, cb);
+          if (ret && typeof ret.then === 'function') ret.then(() => resolve(), reject);
+        } else if (typeof bridge.saveImageToAlbum === 'function') {
+          // dataURL 整体传入（URL / Base64 两种形态通吃）
+          const ret = bridge.saveImageToAlbum(url, cb);
+          if (ret && typeof ret.then === 'function') ret.then(() => resolve(), reject);
+        } else if (typeof bridge.saveImage === 'function') {
+          const ret = bridge.saveImage({ url, data: url }, cb);
+          if (ret && typeof ret.then === 'function') ret.then(() => resolve(), reject);
+        } else {
+          reject(new Error('no save api'));
+        }
+      } catch (e) {
+        reject(e);
+      }
+    });
 
   const exportImage = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const url = canvas.toDataURL('image/png');
 
-    const bridge = (window as any).xhs?.miniTool;
-    if (bridge?.saveImageToPhotosAlbum) {
+    // ① 容器桥接存相册（探测到才走）
+    const bridge = pickBridge();
+    if (bridge) {
       try {
-        // 容器禁止 a[download]，经 writeTempFile 换本地路径后存相册
-        const { filePath } = bridge.writeTempFile
-          ? await bridge.writeTempFile({ data: url })
-          : { filePath: url };
-        await bridge.saveImageToPhotosAlbum({ filePath });
-        setSavedTip('已存入系统相册 ✓');
-        setTimeout(() => setSavedTip(''), 2500);
+        await callBridgeSave(bridge, url);
+        showTip('已存入系统相册 ✓');
       } catch {
-        setSavedTip('保存失败，请检查相册权限');
-        setTimeout(() => setSavedTip(''), 2500);
+        setPreviewUrl(url); // 桥接失败降级长按保存
       }
       return;
     }
 
+    // ② 移动端 WebView（含小红书小工具沙箱）：弹大图长按保存
+    if (isXhsEnv || isTouchWebView) {
+      setPreviewUrl(url);
+      return;
+    }
+
+    // ③ 桌面浏览器：文件下载
     const a = document.createElement('a');
     a.href = url;
     a.download = `西湖游历图册_${Date.now()}.png`;
@@ -217,13 +264,39 @@ export const TravelAlbumModal: React.FC = () => {
             className="btn-ink flex items-center gap-2 rounded-full font-semibold border-[#B83B32] text-[#B83B32]"
           >
             <Download className="w-4 h-4" />
-            <span>{isXhsMiniTool ? '存入相册' : '导出全景画卷 PNG'}</span>
+            <span>{hasBridge ? '存入相册' : isXhsEnv || isTouchWebView ? '保存画卷' : '导出全景画卷 PNG'}</span>
           </button>
         </div>
         {savedTip && (
           <p className="mt-2 text-right text-xs font-semibold text-[#3B6B5E]">{savedTip}</p>
         )}
       </div>
+
+      {/* 长按保存大图层：移动端 WebView（小红书小工具沙箱等）无下载能力的兜底 */}
+      {previewUrl && (
+        <div
+          className="fixed inset-0 z-[120] flex flex-col items-center justify-center gap-4 bg-[#1A1A1A]/85 backdrop-blur-md p-4"
+          onClick={() => setPreviewUrl('')}
+        >
+          <p className="text-sm text-[#F4F1EA] tracking-widest flex items-center gap-1.5">
+            <ImageIcon className="w-4 h-4" /> 长按下方画卷，选择「保存图片」即可存入相册
+          </p>
+          {/* 全局 * { user-select:none } 会压制 WebView 长按菜单，这里逐项恢复 */}
+          <img
+            src={previewUrl}
+            alt="西湖游历图册"
+            className="max-w-full max-h-[70vh] rounded-xl shadow-2xl"
+            style={{ userSelect: 'auto', WebkitUserSelect: 'auto', WebkitTouchCallout: 'default' }}
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            className="text-xs text-[#F4F1EA]/60 tracking-widest underline underline-offset-4 cursor-pointer"
+            onClick={() => setPreviewUrl('')}
+          >
+            收起
+          </button>
+        </div>
+      )}
     </div>
   );
 };

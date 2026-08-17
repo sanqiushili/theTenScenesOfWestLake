@@ -174,12 +174,12 @@ export const PoetryOverlay: React.FC = () => {
         {/* 竖排古籍诗词展示区 */}
         <div className="flex justify-between items-start my-4 sm:my-6 bg-[#F4F1EA] p-4 sm:p-6 rounded-2xl border border-[#2C2C2C]/12 shadow-inner relative overflow-hidden">
             {/* 诗名与作者 */}
-            <div className="writing-vertical text-xs tracking-[0.3em] text-[#6B6B6B] font-medium h-36 sm:h-48 opacity-90 border-r border-[#2C2C2C]/10 pr-3">
+            <div className="writing-vertical text-xs tracking-[0.3em] text-[#6B6B6B] font-medium h-44 sm:h-48 opacity-90 border-r border-[#2C2C2C]/10 pr-3">
               〔{data.dynasty}〕{data.poet} ·《{data.poem}》
             </div>
 
-            {/* 诗句水墨正文 */}
-            <div className="writing-vertical text-base sm:text-lg font-bold tracking-[0.45em] leading-relaxed text-[#2C2C2C] h-36 sm:h-48 pl-2">
+            {/* 诗句水墨正文：原文以 \n 分句，whitespace-pre-line 使每句独立成列 */}
+            <div className="writing-vertical whitespace-pre-line text-base sm:text-lg font-bold tracking-[0.45em] leading-relaxed text-[#2C2C2C] h-44 sm:h-48 pl-2">
               {data.description}
             </div>
         </div>
