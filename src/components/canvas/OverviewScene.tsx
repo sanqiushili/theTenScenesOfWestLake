@@ -262,10 +262,8 @@ const SceneMarker: React.FC<{ id: ValidSceneId; pos: [number, number, number] }>
                 : 'glass-ink-panel text-[#2C2C2C] border-[#C5A55A] group-hover:border-[#B83B32]'
             }`}
           >
+            {/* 全局只有一套命名：直接展示西湖十景名，不叠加印章名副标题 */}
             <span className="tracking-widest">{data.name}</span>
-          </div>
-          <div className="mt-1.5 px-2 py-0.5 text-[10px] tracking-widest font-semibold rounded-full bg-[#1A1A1A]/80 text-[#F4F1EA] border border-[#C5A55A]/40 shadow-lg whitespace-nowrap">
-            {data.stampName}
           </div>
         </button>
       </Html>

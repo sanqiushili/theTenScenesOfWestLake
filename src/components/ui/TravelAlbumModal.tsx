@@ -75,9 +75,9 @@ export const TravelAlbumModal: React.FC = () => {
 
       const photo = isStamped ? photos[id] : undefined;
       if (photo) {
-        /* 已盖印且有照片：明信片式展示；contain 完整展示，
-           不裁掉底部书法落款与印章 */
-        const px = x + 8, py = y + 6, pw = cellW - 16, ph = 100;
+        /* 已盖印且有照片：明信片式铺满整格；contain 完整展示，
+           不裁掉底部书法落款与印章（照片内已有名字，不再重复绘制） */
+        const px = x + 8, py = y + 8, pw = cellW - 16, ph = 134;
         const ar = photo.width / photo.height;
         let dw = pw, dh = pw / ar;
         if (dh > ph) { dh = ph; dw = ph * ar; }
@@ -91,13 +91,6 @@ export const TravelAlbumModal: React.FC = () => {
         ctx.strokeStyle = 'rgba(44, 44, 44, 0.2)';
         ctx.lineWidth = 1;
         ctx.strokeRect(dx + 0.5, dy + 0.5, dw - 1, dh - 1);
-
-        ctx.fillStyle = '#2C2C2C';
-        ctx.font = 'bold 15px "Noto Serif SC", serif';
-        ctx.fillText(data.name, x + 12, y + 126);
-        ctx.font = '10px "Noto Serif SC", serif';
-        ctx.fillStyle = '#666666';
-        ctx.fillText(data.pinyin, x + 12, y + 141);
       } else if (isStamped) {
         /* 已盖印但无照片（回退）：名称 + 朱砂落印 */
         ctx.fillStyle = '#2C2C2C';

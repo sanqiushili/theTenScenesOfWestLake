@@ -24,15 +24,15 @@ export const StampCollectionDock: React.FC = () => {
                 audioManager.playWaterDropSound();
                 setCurrentScene(id);
               }}
-              title={data.name}
               className={`stamp-seal px-3 py-1 text-xs cursor-pointer transition-all duration-300 ${
                 isStamped
                   ? 'bg-[#B83B32] text-[#F4F1EA] border-[#B83B32] shadow-md'
                   : 'bg-[#F4F1EA]/60 text-[#555555] border-dashed border-[#2C2C2C]/30 hover:border-[#B83B32] hover:text-[#B83B32]'
               } ${isActive ? 'ring-2 ring-[#C5A55A] scale-105' : ''}`}
             >
+              {/* 与场景标签一致：直接用西湖十景名，不用印章名 */}
               <span className="font-semibold tracking-wider">
-                {data.stampName}
+                {data.name}
               </span>
             </button>
           );
