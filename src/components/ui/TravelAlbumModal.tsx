@@ -1,17 +1,32 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { useWestLakeStore, WEST_LAKE_SCENES, ALL_SCENE_IDS } from '../../store/useWestLakeStore';
+import { useWestLakeStore, WEST_LAKE_SCENES, ALL_SCENE_IDS, SceneId } from '../../store/useWestLakeStore';
+import { loadImage } from '../../utils/scenePhoto';
 import { X, Download, Award } from 'lucide-react';
 
 export const TravelAlbumModal: React.FC = () => {
-  const { isTravelAlbumOpen, setTravelAlbumOpen, collectedStamps } = useWestLakeStore();
+  const { isTravelAlbumOpen, setTravelAlbumOpen, collectedStamps, scenePhotos } = useWestLakeStore();
   const canvasRef = useRef<HTMLCanvasElement>(null!);
 
-  // 绘制《西湖游历图册》宣纸画卷
-  const drawAlbumCanvas = () => {
+  // 绘制《西湖游历图册》宣纸画卷；已盖印景致展示当时的视角明信片
+  const drawAlbumCanvas = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    // 预加载已盖印景致的明信片照片（dataURL 解码很快，但仍需等 onload）
+    const photos: Partial<Record<SceneId, HTMLImageElement>> = {};
+    await Promise.all(
+      ALL_SCENE_IDS
+        .filter((id) => collectedStamps.has(id) && scenePhotos[id])
+        .map(async (id) => {
+          try {
+            photos[id] = await loadImage(scenePhotos[id]!);
+          } catch {
+            /* 照片损坏时回退为纯印章展示 */
+          }
+        })
+    );
 
     const width = (canvas.width = 1000);
     const height = (canvas.height = 560);
@@ -58,17 +73,41 @@ export const TravelAlbumModal: React.FC = () => {
       ctx.fill();
       ctx.stroke();
 
-      // 景点名称
-      ctx.fillStyle = isStamped ? '#2C2C2C' : '#888888';
-      ctx.font = 'bold 20px "Noto Serif SC", serif';
-      ctx.fillText(data.name, x + 16, y + 42);
+      const photo = isStamped ? photos[id] : undefined;
+      if (photo) {
+        /* 已盖印且有照片：明信片式展示；contain 完整展示，
+           不裁掉底部书法落款与印章 */
+        const px = x + 8, py = y + 6, pw = cellW - 16, ph = 100;
+        const ar = photo.width / photo.height;
+        let dw = pw, dh = pw / ar;
+        if (dh > ph) { dh = ph; dw = ph * ar; }
+        const dx = px + (pw - dw) / 2, dy = py + (ph - dh) / 2;
+        ctx.save();
+        ctx.shadowColor = 'rgba(44, 44, 44, 0.18)';
+        ctx.shadowBlur = 5;
+        ctx.shadowOffsetY = 2;
+        ctx.drawImage(photo, dx, dy, dw, dh);
+        ctx.restore();
+        ctx.strokeStyle = 'rgba(44, 44, 44, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(dx + 0.5, dy + 0.5, dw - 1, dh - 1);
 
-      ctx.font = '11px "Noto Serif SC", serif';
-      ctx.fillStyle = '#666666';
-      ctx.fillText(data.pinyin, x + 16, y + 62);
+        ctx.fillStyle = '#2C2C2C';
+        ctx.font = 'bold 15px "Noto Serif SC", serif';
+        ctx.fillText(data.name, x + 12, y + 126);
+        ctx.font = '10px "Noto Serif SC", serif';
+        ctx.fillStyle = '#666666';
+        ctx.fillText(data.pinyin, x + 12, y + 141);
+      } else if (isStamped) {
+        /* 已盖印但无照片（回退）：名称 + 朱砂落印 */
+        ctx.fillStyle = '#2C2C2C';
+        ctx.font = 'bold 20px "Noto Serif SC", serif';
+        ctx.fillText(data.name, x + 16, y + 42);
 
-      // 印章朱砂落印
-      if (isStamped) {
+        ctx.font = '11px "Noto Serif SC", serif';
+        ctx.fillStyle = '#666666';
+        ctx.fillText(data.pinyin, x + 16, y + 62);
+
         ctx.fillStyle = '#B83B32';
         ctx.strokeStyle = '#B83B32';
         ctx.lineWidth = 2;
@@ -78,6 +117,15 @@ export const TravelAlbumModal: React.FC = () => {
         ctx.fillText(data.stampName.substring(0, 2), x + 108, y + 84);
         ctx.fillText(data.stampName.substring(2, 4), x + 108, y + 106);
       } else {
+        /* 未解锁 */
+        ctx.fillStyle = '#888888';
+        ctx.font = 'bold 20px "Noto Serif SC", serif';
+        ctx.fillText(data.name, x + 16, y + 42);
+
+        ctx.font = '11px "Noto Serif SC", serif';
+        ctx.fillStyle = '#666666';
+        ctx.fillText(data.pinyin, x + 16, y + 62);
+
         ctx.fillStyle = '#C8C5BC';
         ctx.font = '12px "Noto Serif SC", serif';
         ctx.fillText('〔未解锁〕', x + 96, y + 92);
@@ -99,7 +147,7 @@ export const TravelAlbumModal: React.FC = () => {
     if (isTravelAlbumOpen) {
       setTimeout(drawAlbumCanvas, 100);
     }
-  }, [isTravelAlbumOpen, collectedStamps]);
+  }, [isTravelAlbumOpen, collectedStamps, scenePhotos]);
 
   // 导出 PNG：浏览器端走文件下载；小红书小工具容器内改走 JSBridge 存入系统相册
   const isXhsMiniTool = typeof window !== 'undefined' && !!(window as any).xhs?.miniTool;
@@ -162,7 +210,7 @@ export const TravelAlbumModal: React.FC = () => {
         {/* 底部导出与操作栏 */}
         <div className="mt-6 flex flex-col-reverse sm:flex-row items-start sm:items-center justify-between gap-3">
           <p className="text-xs text-[#555555]">
-            💡 游览完成景点并点击“盖章”即可将水墨印章收录至个人游历图册中。
+            💡 游览景点时按下“盖印”，即拍下当前视角并落印，收录为一页游历明信片。
           </p>
           <button
             onClick={exportImage}

@@ -63,6 +63,8 @@ export const App: React.FC = () => {
       <Canvas
         shadows
         dpr={[1, 2]}
+        // preserveDrawingBuffer：盖印即拍照，需随时截取含后处理的最终帧
+        gl={{ preserveDrawingBuffer: true }}
         camera={{ position: [0, 46, 66], fov: 50, near: 0.5, far: 600 }}
         className="w-full h-full cursor-grab active:cursor-grabbing"
       >

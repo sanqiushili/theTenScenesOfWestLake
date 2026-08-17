@@ -204,6 +204,8 @@ interface WestLakeState {
   timeOfDay: TimeOfDay;
   season: Season;
   collectedStamps: Set<SceneId>;
+  /** 盖印时拍下的视角明信片（已合成印章与落款的 JPEG dataURL） */
+  scenePhotos: Partial<Record<SceneId, string>>;
   isAudioMuted: boolean;
   isTravelAlbumOpen: boolean;
   scrollProgress: number;
@@ -220,7 +222,7 @@ interface WestLakeState {
   setCurrentScene: (scene: SceneId) => void;
   setTimeOfDay: (time: TimeOfDay) => void;
   setSeason: (season: Season) => void;
-  collectStamp: (scene: SceneId) => void;
+  collectStamp: (scene: SceneId, photo?: string) => void;
   toggleAudioMute: () => void;
   setTravelAlbumOpen: (open: boolean) => void;
   setScrollProgress: (progress: number) => void;
@@ -237,6 +239,7 @@ export const useWestLakeStore = create<WestLakeState>((set) => ({
   timeOfDay: 'dawn',
   season: 'spring',
   collectedStamps: new Set<SceneId>(),
+  scenePhotos: {},
   isAudioMuted: false,
   isTravelAlbumOpen: false,
   scrollProgress: 0,
@@ -259,10 +262,14 @@ export const useWestLakeStore = create<WestLakeState>((set) => ({
   setTimeOfDay: (time) => set({ timeOfDay: time }),
   setSeason: (season) => set({ season }),
 
-  collectStamp: (scene) => set((state) => {
+  collectStamp: (scene, photo) => set((state) => {
     const next = new Set(state.collectedStamps);
     next.add(scene);
-    return { collectedStamps: next };
+    // 盖印即拍照：重拍时用新视角照片覆盖旧的
+    return {
+      collectedStamps: next,
+      scenePhotos: photo ? { ...state.scenePhotos, [scene]: photo } : state.scenePhotos
+    };
   }),
 
   toggleAudioMute: () => set((state) => ({ isAudioMuted: !state.isAudioMuted })),

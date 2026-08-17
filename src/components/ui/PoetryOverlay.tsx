@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useWestLakeStore, WEST_LAKE_SCENES } from '../../store/useWestLakeStore';
 import { audioManager } from '../../audio/AudioManager';
-import { Sparkles, Thermometer, Sun, Bell, Droplets, Wind, Fish, Feather, Flower2, ChevronDown, ChevronUp } from 'lucide-react';
+import { captureScenePhotoWithRetry, composeStampedPhoto } from '../../utils/scenePhoto';
+import { Sparkles, Thermometer, Sun, Bell, Droplets, Wind, Fish, Feather, Flower2, ChevronDown, ChevronUp, X } from 'lucide-react';
 
 export const PoetryOverlay: React.FC = () => {
   const {
@@ -19,14 +20,48 @@ export const PoetryOverlay: React.FC = () => {
 
   // 诗词卡收起状态；进入新场景时自动展开
   const [collapsed, setCollapsed] = useState(false);
+  // 盖印即拍照：快门闪光与拍摄中态
+  const [flash, setFlash] = useState(false);
+  const [shooting, setShooting] = useState(false);
+  // 盖印后当场晒出的拍立得明信片（含印章），几秒后自动收起
+  const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
+  const [photoTip, setPhotoTip] = useState('');
+  const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     setCollapsed(false);
   }, [currentScene]);
+  useEffect(() => () => {
+    if (previewTimer.current) clearTimeout(previewTimer.current);
+  }, []);
 
   if (currentScene === 'overview') return null;
 
   const data = WEST_LAKE_SCENES[currentScene];
   const isStamped = collectedStamps.has(currentScene);
+
+  // 盖印即拍照：抓下用户当前调好的视角，装裱成拍立得收入图册，
+  // 并当场晒出给用户确认；已盖印再按一次即重拍覆盖
+  const handleStamp = async () => {
+    if (shooting) return;
+    setShooting(true);
+    setFlash(true);
+    setTimeout(() => setFlash(false), 220);
+    audioManager.playStampSound();
+    // 黑帧防护：渲染未就绪时等下一帧重试
+    const raw = await captureScenePhotoWithRetry();
+    if (!raw) {
+      setShooting(false);
+      setPhotoTip('画面尚未就绪，请稍后再按一次');
+      setTimeout(() => setPhotoTip(''), 2600);
+      return;
+    }
+    const photo = await composeStampedPhoto(raw, data).catch(() => raw);
+    collectStamp(currentScene, photo);
+    setPreviewPhoto(photo);
+    if (previewTimer.current) clearTimeout(previewTimer.current);
+    previewTimer.current = setTimeout(() => setPreviewPhoto(null), 7000);
+    setShooting(false);
+  };
 
   // 收起态：缩成贴边小胶囊，仅保留展开入口，不遮挡画布交互区
   if (collapsed) {
@@ -49,6 +84,40 @@ export const PoetryOverlay: React.FC = () => {
   }
 
   return (
+    <>
+    {/* 快门闪光：盖印瞬间白幕一闪即收 */}
+    {flash && (
+      <div className="fixed inset-0 z-[95] bg-white pointer-events-none animate-shutter-flash" />
+    )}
+
+    {/* 盖印后当场晒出的拍立得：印章压在照片上，给用户明确的"拍到了"认知 */}
+    {previewPhoto && (
+      <div className="fixed right-2 sm:right-8 top-[16%] sm:top-1/2 z-[70] pointer-events-none animate-postcard-in">
+        <div className="relative w-36 sm:w-60 rotate-2 pointer-events-auto">
+          {/* 和纸胶带 */}
+          <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-16 sm:w-24 h-4 sm:h-5 bg-[#C5A55A]/45 -rotate-3 rounded-[2px] z-10 shadow-sm" />
+          <img
+            src={previewPhoto}
+            alt={`${data.name} 游历明信片`}
+            className="w-full block rounded-[3px] shadow-2xl border border-[#2C2C2C]/15"
+          />
+          <button
+            onClick={() => {
+              setPreviewPhoto(null);
+              if (previewTimer.current) clearTimeout(previewTimer.current);
+            }}
+            className="absolute -top-2 -right-2 p-1 rounded-full bg-[#2C2C2C]/70 text-[#F4F1EA] cursor-pointer hover:bg-[#2C2C2C] transition-colors z-10"
+            title="收起照片"
+          >
+            <X className="w-3 h-3" />
+          </button>
+          <p className="mt-2 text-center text-[10px] sm:text-xs text-[#555555] tracking-widest">
+            已收入《游历图册》· 再按可重拍
+          </p>
+        </div>
+      </div>
+    )}
+
     <div className="fixed inset-y-0 left-3 sm:left-8 z-[60] flex items-center pointer-events-none">
       <div className="glass-ink-panel p-4 sm:p-8 rounded-3xl w-[min(88vw,24rem)] sm:max-w-sm pointer-events-auto shadow-2xl animate-ink-fade relative border-2 border-[#C5A55A]/60 bg-[#F4F1EA]/85 backdrop-blur-xl max-h-[70vh] overflow-y-auto">
         {/* 顶部金边装饰点缀 */}
@@ -68,20 +137,25 @@ export const PoetryOverlay: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="relative flex items-center gap-2 shrink-0">
             <button
-              onClick={() => {
-                audioManager.playStampSound();
-                collectStamp(currentScene);
-              }}
+              onClick={handleStamp}
+              title={isStamped ? '再按一次，重新拍下当前视角' : '拍下当前视角并盖印'}
               className={`stamp-seal px-2.5 sm:px-3.5 py-2 text-xs font-semibold cursor-pointer transition-all duration-300 shadow-md ${
                 isStamped
                   ? 'bg-[#B83B32] text-[#F4F1EA] border-[#B83B32] scale-105'
                   : 'bg-[#F4F1EA] text-[#B83B32] hover:bg-[#B83B32] hover:text-[#F4F1EA]'
               }`}
             >
-              {isStamped ? '✓ 已印' : `盖印`}
+              {shooting ? '成像中…' : isStamped ? '✓ 已印' : '盖印'}
             </button>
+
+            {/* 截屏失败提示 */}
+            {photoTip && (
+              <span className="absolute -bottom-6 right-0 text-[10px] text-[#B83B32] font-semibold whitespace-nowrap">
+                {photoTip}
+              </span>
+            )}
 
             {/* 收起诗词卡：腾出画布操作区，移动端交互必需 */}
             <button
@@ -230,5 +304,6 @@ export const PoetryOverlay: React.FC = () => {
         </div>
       </div>
     </div>
+    </>
   );
 };

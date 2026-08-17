@@ -84,6 +84,32 @@ body::before {
   animation: inkFadeIn 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* 盖印即拍照：快门闪光，白幕一闪即收 */
+@keyframes shutterFlash {
+  0% { opacity: 0.92; }
+  100% { opacity: 0; }
+}
+
+.animate-shutter-flash {
+  animation: shutterFlash 0.22s ease-out forwards;
+}
+
+/* 盖印后晒出的拍立得：旋转入场像照片落定 */
+@keyframes postcardIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px) rotate(9deg) scale(0.86);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+}
+
+.animate-postcard-in {
+  animation: postcardIn 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 /* 水墨毛玻璃面板 */
 .glass-ink-panel {
   background: rgba(244, 241, 234, 0.75);
