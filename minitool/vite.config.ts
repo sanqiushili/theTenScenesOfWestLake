@@ -9,6 +9,9 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   base: './',
+  define: {
+    __MINITOOL__: true
+  },
   // 小红书容器用自带图标，根目录的 public/（含 favicon/apple-touch-icon 等）
   // 不应进入小工具产物——会触发合规扫描的"禁用文件类型"拦截
   publicDir: false,

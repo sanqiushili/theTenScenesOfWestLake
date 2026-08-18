@@ -2,6 +2,7 @@ import React from 'react';
 import { useWestLakeStore, WEST_LAKE_SCENES, TimeOfDay, Season, ALL_SCENE_IDS } from '../../store/useWestLakeStore';
 import { audioManager } from '../../audio/AudioManager';
 import { Volume2, VolumeX, Compass, Calendar, Sun, Moon, Sunrise, Sunset, BookOpen, ChevronLeft } from 'lucide-react';
+import { DeveloperInfo } from './DeveloperInfo';
 
 export const HeaderNavigation: React.FC = () => {
   const {
@@ -122,8 +123,9 @@ export const HeaderNavigation: React.FC = () => {
         )}
       </div>
 
-      {/* 右下角：声音 + 图册（固定浮钮） */}
+      {/* 右下角：声音 + 图册 + 关于开发者（固定浮钮） */}
       <div className="fixed bottom-5 right-5 z-[80] flex items-center gap-2 pointer-events-auto">
+        <DeveloperInfo />
         <button
           onClick={() => {
             audioManager.playStampSound();
