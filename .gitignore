@@ -9,9 +9,9 @@ shots/
 *.log
 .playwright-cli/
 
-# 小红书小工具打包产物与 skill 文档
+# 小红书小工具：源码纳入版本控制，仅忽略字体源（体积大、可重建）与构建产物
 .skill/
-minitool/
+minitool/tmp/ttf/
 minitool-dist/
 minitool.zip
 minitool-assets/
