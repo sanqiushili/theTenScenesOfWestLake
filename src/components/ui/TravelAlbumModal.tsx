@@ -414,7 +414,7 @@ export const TravelAlbumModal: React.FC = () => {
           <button
             onClick={exportImage}
             disabled={saving}
-            className="btn-ink flex items-center gap-2 rounded-full font-semibold border-[#B83B32] text-[#B83B32] disabled:opacity-50"
+            className="flex items-center gap-2 rounded-full font-semibold px-5 py-2.5 bg-[#F4F1EA] text-[#2C2C2C] border border-[#2C2C2C]/20 hover:bg-[#2C2C2C] hover:text-[#F4F1EA] hover:border-[#2C2C2C] transition-colors disabled:opacity-50 cursor-pointer"
           >
             <Download className="w-4 h-4" />
             <span>{saving ? '处理中…' : bridgeReady ? '存入相册' : isTouchWebView ? '保存画卷' : '导出画卷 JPG'}</span>
@@ -424,7 +424,7 @@ export const TravelAlbumModal: React.FC = () => {
             <button
               onClick={shareAsNote}
               disabled={saving}
-              className="btn-ink flex items-center gap-2 rounded-full font-semibold border-[#3B6B5E] text-[#3B6B5E] disabled:opacity-50"
+              className="flex items-center gap-2 rounded-full font-semibold px-5 py-2.5 bg-[#F4F1EA] text-[#2C2C2C] border border-[#2C2C2C]/20 hover:bg-[#2C2C2C] hover:text-[#F4F1EA] hover:border-[#2C2C2C] transition-colors disabled:opacity-50 cursor-pointer"
             >
               <Send className="w-4 h-4" />
               <span>发布为笔记</span>

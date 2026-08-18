@@ -3,7 +3,7 @@ import { useWestLakeStore, WEST_LAKE_SCENES } from '../../store/useWestLakeStore
 import { AliasModal } from './AliasModal';
 import { audioManager } from '../../audio/AudioManager';
 import { captureScenePhotoWithRetry, composeStampedPhoto } from '../../utils/scenePhoto';
-import { Sparkles, Thermometer, Sun, Bell, Droplets, Wind, Fish, Feather, Flower2, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { Sparkles, Thermometer, Sun, Bell, Droplets, Wind, Fish, Feather, Flower2, ChevronDown, ChevronUp, X, Download, Send } from 'lucide-react';
 
 export const PoetryOverlay: React.FC = () => {
   const {
@@ -30,9 +30,99 @@ export const PoetryOverlay: React.FC = () => {
   // 盖印后当场晒出的拍立得明信片（含印章），几秒后自动收起
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
   const [photoTip, setPhotoTip] = useState('');
+  // 全屏放大查看明信片 + 保存
+  const [fullscreenPhoto, setFullscreenPhoto] = useState<string | null>(null);
+  const [savedTip, setSavedTip] = useState('');
+  const [saving, setSaving] = useState(false);
   // 首次盖印题名弹窗
   const [showAliasModal, setShowAliasModal] = useState(false);
   const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 轮询检测小红书 SDK 注入（与 TravelAlbumModal 同一逻辑）
+  const [bridgeReady, setBridgeReady] = useState(false);
+  const isTouchWebView =
+    typeof window !== 'undefined' &&
+    ('ontouchstart' in window || (navigator?.maxTouchPoints ?? 0) > 0);
+
+  useEffect(() => {
+    if (bridgeReady) return;
+    const check = () => {
+      const mt = (window as any).xhs?.miniTool;
+      return !!(mt && typeof mt.saveImageToPhotosAlbum === 'function');
+    };
+    if (check()) { setBridgeReady(true); return; }
+    const iv = setInterval(() => {
+      if (check()) { setBridgeReady(true); clearInterval(iv); }
+    }, 200);
+    const to = setTimeout(() => clearInterval(iv), 5000);
+    return () => { clearInterval(iv); clearTimeout(to); };
+  }, [bridgeReady]);
+
+  const showTip = (msg: string) => {
+    setSavedTip(msg);
+    setTimeout(() => setSavedTip(''), 2500);
+  };
+
+  // 大图 base64 先 writeTempFile 落文件再传，避免超长 base64 上行
+  const toTempFile = async (mt: any, dataUrl: string): Promise<string> => {
+    if (typeof mt?.writeTempFile === 'function') {
+      try {
+        const res = await mt.writeTempFile({ data: dataUrl });
+        if (res?.filePath) return res.filePath;
+      } catch { /* 回退直传 dataURL */ }
+    }
+    return dataUrl;
+  };
+
+  // 保存单张明信片到相册 / 发笔记（与图册保存同一 JSAPI 链路）
+  const savePhoto = async () => {
+    if (!fullscreenPhoto || saving) return;
+    const mt = (window as any).xhs?.miniTool;
+    if (mt && typeof mt.saveImageToPhotosAlbum === 'function') {
+      setSaving(true);
+      try {
+        const filePath = await toTempFile(mt, fullscreenPhoto);
+        await mt.saveImageToPhotosAlbum({ filePath });
+        showTip('已存入系统相册 ✓');
+      } catch (err: any) {
+        showTip(err?.errMsg ? '保存失败，请检查相册权限' : '保存失败，请重试');
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+    // 普通移动端 WebView：提示长按图片保存
+    if (isTouchWebView) {
+      showTip('长按上方图片，选择「保存图片」');
+      return;
+    }
+    // 桌面下载
+    const a = document.createElement('a');
+    a.href = fullscreenPhoto;
+    a.download = `${data.name}_明信片_${Date.now()}.jpg`;
+    a.click();
+  };
+
+  const sharePhotoAsNote = async () => {
+    if (!fullscreenPhoto || saving) return;
+    const mt = (window as any).xhs?.miniTool;
+    if (!mt || typeof mt.postNote !== 'function') return;
+    setSaving(true);
+    try {
+      const imgUrl = await toTempFile(mt, fullscreenPhoto);
+      await mt.postNote({
+        title: data.name,
+        content: `我是「${userAlias}」，在西湖十景·${data.name}盖印留影，落印为记。`,
+        tags: '#西湖十景 #数字艺术 #水墨',
+        mediaInfo: { image_resources: [{ url: imgUrl }] }
+      });
+    } catch {
+      showTip('未能唤起发布页，请重试');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   useEffect(() => {
     setCollapsed(false);
   }, [currentScene]);
@@ -111,7 +201,7 @@ export const PoetryOverlay: React.FC = () => {
       <div className="fixed inset-0 z-[95] bg-white pointer-events-none animate-shutter-flash" />
     )}
 
-    {/* 盖印后当场晒出的拍立得：印章压在照片上，给用户明确的"拍到了"认知 */}
+    {/* 盖印后当场晒出的拍立得：印章压在照片上，给用户明确的"拍到了"认知；点击放大查看并保存 */}
     {previewPhoto && (
       <div className="fixed right-2 sm:right-8 top-[16%] sm:top-1/2 z-[70] pointer-events-none animate-postcard-in">
         <div className="relative w-36 sm:w-60 rotate-2 pointer-events-auto">
@@ -120,7 +210,11 @@ export const PoetryOverlay: React.FC = () => {
           <img
             src={previewPhoto}
             alt={`${data.name} 游历明信片`}
-            className="w-full block rounded-[3px] shadow-2xl border border-[#2C2C2C]/15"
+            className="w-full block rounded-[3px] shadow-2xl border border-[#2C2C2C]/15 cursor-pointer hover:brightness-105 transition-all"
+            onClick={() => {
+              setFullscreenPhoto(previewPhoto);
+              if (previewTimer.current) clearTimeout(previewTimer.current);
+            }}
           />
           <button
             onClick={() => {
@@ -133,9 +227,58 @@ export const PoetryOverlay: React.FC = () => {
             <X className="w-3 h-3" />
           </button>
           <p className="mt-2 text-center text-[10px] sm:text-xs text-[#555555] tracking-widest">
-            已收入《游历图册》· 再按可重拍
+            点击放大查看 · 可保存 · 再按可重拍
           </p>
         </div>
+      </div>
+    )}
+
+    {/* 全屏放大查看明信片 + 保存到相册 / 发笔记 */}
+    {fullscreenPhoto && (
+      <div className="fixed inset-0 z-[110] flex flex-col items-center justify-center gap-4 bg-[#1A1A1A]/85 backdrop-blur-md p-4 animate-ink-fade">
+        {/* 关闭按钮 */}
+        <button
+          onClick={() => setFullscreenPhoto(null)}
+          className="absolute top-3 right-3 p-2 rounded-full bg-[#2C2C2C]/60 text-[#F4F1EA] cursor-pointer hover:bg-[#2C2C2C] transition-colors z-10"
+          title="关闭"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* 大图明信片 */}
+        <img
+          src={fullscreenPhoto}
+          alt={`${data.name} 游历明信片`}
+          className="max-w-full max-h-[65vh] rounded-xl shadow-2xl border border-[#C5A55A]/30"
+          style={bridgeReady ? undefined : { userSelect: 'auto', WebkitUserSelect: 'auto', WebkitTouchCallout: 'default' as any }}
+          onClick={(e) => e.stopPropagation()}
+        />
+
+        {/* 操作按钮栏 */}
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={savePhoto}
+            disabled={saving}
+            className="flex items-center gap-2 rounded-full font-semibold px-5 py-2.5 bg-[#F4F1EA] text-[#2C2C2C] border border-[#2C2C2C]/20 hover:bg-[#2C2C2C] hover:text-[#F4F1EA] hover:border-[#2C2C2C] transition-colors disabled:opacity-50 cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            <span>{saving ? '处理中…' : bridgeReady ? '存入相册' : isTouchWebView ? '长按图片保存' : '保存明信片'}</span>
+          </button>
+          {bridgeReady && (
+            <button
+              onClick={sharePhotoAsNote}
+              disabled={saving}
+              className="flex items-center gap-2 rounded-full font-semibold px-5 py-2.5 bg-[#F4F1EA] text-[#2C2C2C] border border-[#2C2C2C]/20 hover:bg-[#2C2C2C] hover:text-[#F4F1EA] hover:border-[#2C2C2C] transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              <Send className="w-4 h-4" />
+              <span>发布为笔记</span>
+            </button>
+          )}
+        </div>
+
+        {savedTip && (
+          <p className="text-xs font-semibold text-[#3B6B5E] tracking-widest">{savedTip}</p>
+        )}
       </div>
     )}
 

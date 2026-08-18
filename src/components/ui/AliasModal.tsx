@@ -84,7 +84,7 @@ export const AliasModal: React.FC<AliasModalProps> = ({
 
         <button
           onClick={confirm}
-          className="btn-ink w-full flex items-center justify-center gap-2 rounded-full font-semibold border-[#B83B32] text-[#B83B32] py-3"
+          className="w-full flex items-center justify-center gap-2 rounded-full font-semibold py-3 bg-[#F4F1EA] text-[#2C2C2C] border border-[#2C2C2C]/20 hover:bg-[#2C2C2C] hover:text-[#F4F1EA] hover:border-[#2C2C2C] transition-colors cursor-pointer"
         >
           题名并继续
         </button>
