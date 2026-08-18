@@ -219,15 +219,32 @@ export const TravelAlbumModal: React.FC = () => {
   // 降级链：① 小工具容器 → JSAPI 存相册（大图先 writeTempFile 换 filePath）；
   //        ② 普通移动端 WebView → 弹大图引导长按保存；
   //        ③ 桌面浏览器 → a[download] 文件下载。
-  const miniTool = typeof window !== 'undefined' ? (window as any).xhs?.miniTool : undefined;
-  const hasBridge = typeof miniTool?.saveImageToPhotosAlbum === 'function';
+  //
+  // 关键：SDK 注入是异步的，组件首次渲染时 window.xhs.miniTool 可能尚未就绪。
+  // 用 bridgeReady state + 轮询检测；点击时再检测一次做双保险。
   const isTouchWebView =
     typeof window !== 'undefined' &&
     ('ontouchstart' in window || (navigator?.maxTouchPoints ?? 0) > 0);
+  const [bridgeReady, setBridgeReady] = useState(false);
   const [savedTip, setSavedTip] = useState('');
   const [saving, setSaving] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
   const [showAliasModal, setShowAliasModal] = useState(false);
+
+  // 轮询检测 SDK 注入（最多等 5s），就绪后 bridgeReady=true 触发按钮文案更新
+  useEffect(() => {
+    if (bridgeReady) return;
+    const check = () => {
+      const mt = (window as any).xhs?.miniTool;
+      return !!(mt && typeof mt.saveImageToPhotosAlbum === 'function');
+    };
+    if (check()) { setBridgeReady(true); return; }
+    const iv = setInterval(() => {
+      if (check()) { setBridgeReady(true); clearInterval(iv); }
+    }, 200);
+    const to = setTimeout(() => clearInterval(iv), 5000);
+    return () => { clearInterval(iv); clearTimeout(to); };
+  }, [bridgeReady]);
 
   const showTip = (msg: string) => {
     setSavedTip(msg);
@@ -235,10 +252,10 @@ export const TravelAlbumModal: React.FC = () => {
   };
 
   // 大图 base64 先用 writeTempFile 落成临时文件，避免超长 base64 上行；失败回退直传 dataURL
-  const toTempFile = async (dataUrl: string): Promise<string> => {
-    if (typeof miniTool?.writeTempFile === 'function') {
+  const toTempFile = async (mt: any, dataUrl: string): Promise<string> => {
+    if (typeof mt?.writeTempFile === 'function') {
       try {
-        const res = await miniTool.writeTempFile({ data: dataUrl });
+        const res = await mt.writeTempFile({ data: dataUrl });
         if (res?.filePath) return res.filePath;
       } catch {
         /* 回退直传 dataURL（saveImageToPhotosAlbum 的 filePath 也接受 data: base64） */
@@ -253,12 +270,13 @@ export const TravelAlbumModal: React.FC = () => {
     // 高清 JPEG（无透明需求，体积远小于 PNG，便于 writeTempFile 上行）
     const url = canvas.toDataURL('image/jpeg', 0.92);
 
-    // ① 小红书小工具：JSAPI 存入系统相册（需用户主动点击触发，首次会弹相册权限）
-    if (hasBridge) {
+    // ① 小红书小工具：JSAPI 存入系统相册（点击时重新检测，防止 SDK 延迟注入）
+    const mt = (window as any).xhs?.miniTool;
+    if (mt && typeof mt.saveImageToPhotosAlbum === 'function') {
       setSaving(true);
       try {
-        const filePath = await toTempFile(url);
-        await miniTool.saveImageToPhotosAlbum({ filePath });
+        const filePath = await toTempFile(mt, url);
+        await mt.saveImageToPhotosAlbum({ filePath });
         showTip('已存入系统相册 ✓');
       } catch (err: any) {
         showTip(err?.errMsg ? '保存失败，请检查相册权限' : '保存失败，请重试');
@@ -284,11 +302,13 @@ export const TravelAlbumModal: React.FC = () => {
   // 小工具额外端能力：把图册带入小红书笔记发布页（postNote，成功只代表发布页被唤起）
   const shareAsNote = async () => {
     const canvas = canvasRef.current;
-    if (!canvas || saving || typeof miniTool?.postNote !== 'function') return;
+    if (!canvas || saving) return;
+    const mt = (window as any).xhs?.miniTool;
+    if (!mt || typeof mt.postNote !== 'function') return;
     setSaving(true);
     try {
-      const imgUrl = await toTempFile(canvas.toDataURL('image/jpeg', 0.92));
-      await miniTool.postNote({
+      const imgUrl = await toTempFile(mt, canvas.toDataURL('image/jpeg', 0.92));
+      await mt.postNote({
         title: '西湖十景 · 游历图册',
         content: `我是「${userAlias}」，在水墨体素的西湖里漫游，逐景盖印留影，集成一卷专属游历图册。${userHandbill ? '游历手札：「' + userHandbill + '」' : ''}`,
         tags: '#西湖十景 #数字艺术 #水墨',
@@ -397,10 +417,10 @@ export const TravelAlbumModal: React.FC = () => {
             className="btn-ink flex items-center gap-2 rounded-full font-semibold border-[#B83B32] text-[#B83B32] disabled:opacity-50"
           >
             <Download className="w-4 h-4" />
-            <span>{saving ? '处理中…' : hasBridge ? '存入相册' : isTouchWebView ? '保存画卷' : '导出画卷 JPG'}</span>
+            <span>{saving ? '处理中…' : bridgeReady ? '存入相册' : isTouchWebView ? '保存画卷' : '导出画卷 JPG'}</span>
           </button>
           {/* 小工具端能力：把图册带入小红书笔记发布页 */}
-          {typeof miniTool?.postNote === 'function' && (
+          {bridgeReady && (
             <button
               onClick={shareAsNote}
               disabled={saving}
