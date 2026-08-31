@@ -1,7 +1,7 @@
 import React from 'react';
 import { useWestLakeStore, WEST_LAKE_SCENES, TimeOfDay, Season, ALL_SCENE_IDS } from '../../store/useWestLakeStore';
 import { audioManager } from '../../audio/AudioManager';
-import { Volume2, VolumeX, Compass, Calendar, Sun, Moon, Sunrise, Sunset, BookOpen, ChevronLeft } from 'lucide-react';
+import { Volume2, VolumeX, Compass, Calendar, Sun, Moon, Sunrise, Sunset, BookOpen, ChevronLeft, Github } from 'lucide-react';
 import { DeveloperInfo } from './DeveloperInfo';
 
 export const HeaderNavigation: React.FC = () => {
@@ -123,8 +123,19 @@ export const HeaderNavigation: React.FC = () => {
         )}
       </div>
 
-      {/* 右下角：声音 + 图册 + 关于开发者（固定浮钮） */}
+      {/* 右下角：GitHub + 关于开发者 + 图册 + 声音（固定浮钮） */}
       <div className="fixed bottom-5 right-5 z-[80] flex items-center gap-2 pointer-events-auto">
+        {(typeof __MINITOOL__ === 'undefined' || !__MINITOOL__) && (
+          <a
+            href="https://github.com/sanqiushili/theTenScenesOfWestLake"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="glass-ink-panel p-3 rounded-full cursor-pointer shadow-lg hover:border-[#C5A55A] hover:scale-105 transition-all text-[#2C2C2C] flex items-center justify-center"
+            title="GitHub 源码仓库"
+          >
+            <Github className="w-5 h-5" />
+          </a>
+        )}
         <DeveloperInfo />
         <button
           onClick={() => {

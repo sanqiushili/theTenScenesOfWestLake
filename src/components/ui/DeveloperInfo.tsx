@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Info, X, Globe, Twitter } from 'lucide-react';
+import { Info, X, Globe, Twitter, Github } from 'lucide-react';
 
 /**
  * 开发者信息浮钮 + 弹出卡片。
  * 固定在右下角浮钮区，与声音/图册按钮并排。
- * 点击展开极简卡片，引流到个人网站和 Twitter（X）。
+ * 点击展开极简卡片，引流到 GitHub、个人网站和 Twitter（X）。
  */
 export const DeveloperInfo: React.FC = () => {
   // 小红书小工具容器内不显示（外链无法跳转）
@@ -64,6 +64,18 @@ export const DeveloperInfo: React.FC = () => {
 
             {/* 外链 */}
             <div className="flex flex-col gap-2.5">
+              <a
+                href="https://github.com/sanqiushili/theTenScenesOfWestLake"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[#F4F1EA] text-[#2C2C2C] border border-[#2C2C2C]/15 hover:bg-[#2C2C2C] hover:text-[#F4F1EA] hover:border-[#2C2C2C] transition-colors cursor-pointer"
+              >
+                <Github className="w-4 h-4 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">GitHub 源码仓库</p>
+                  <p className="text-xs opacity-70 truncate">sanqiushili/theTenScenesOfWestLake</p>
+                </div>
+              </a>
               <a
                 href="https://sqsl.art"
                 target="_blank"
