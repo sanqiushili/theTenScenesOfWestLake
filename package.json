@@ -1,8 +1,25 @@
 {
   "name": "the-ten-scenes-of-west-lake",
-  "private": true,
   "version": "1.0.0",
+  "description": "西湖十景 · 新中式数字水墨 3D 沉浸漫游与体素山水 (Three.js / React Three Fiber / Voxel)",
   "type": "module",
+  "license": "MIT",
+  "author": "三秋十李",
+  "homepage": "https://xihu10.sqsl.art",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sanqiushili/theTenScenesOfWestLake.git"
+  },
+  "keywords": [
+    "threejs",
+    "react-three-fiber",
+    "r3f",
+    "voxel",
+    "west-lake",
+    "chinese-ink",
+    "shaders",
+    "webgl"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

@@ -20,8 +20,12 @@ minitool-assets/
 .DS_Store
 .idea/
 .vscode/
+.workbuddy/
+.cursor/
+.claude/
 *.local
 
 # 环境变量
 .env
 .env.*
+
